@@ -1,0 +1,319 @@
+================================================================================
+PHÂN CÔNG NHIỆM VỤ - DỰ ÁN SOCIAL MEDIA BACKEND
+================================================================================
+
+NGUYÊN TẮC PHÂN CÔNG:
+- Tú: Làm Authentication & Security (vì Trung đã làm ở dự án trước)
+- Trung: Làm nhiều Entity hơn (bù lại phần Security)
+- Cả 2 đều học WebSocket và Kafka (kiến thức mới)
+- Phân chia đều để cả 2 cùng học và phát triển
+
+================================================================================
+TÚ - AUTHENTICATION, SECURITY & CHAT
+================================================================================
+
+1. AUTHENTICATION & SECURITY (Core)
+   ├── Config
+   │   ├── SecurityConfig.java
+   │   ├── CorsConfig.java
+   │   └── SwaggerConfig.java
+   │
+   ├── Infrastructure/Security
+   │   ├── JwtTokenProvider.java
+   │   ├── JwtAuthenticationFilter.java
+   │   ├── CustomUserDetailsService.java
+   │   └── SecurityUtils.java
+   │
+   ├── Domain/Entity
+   │   └── User.java
+   │
+   ├── Repository
+   │   └── UserRepository.java
+   │
+   ├── Service
+   │   ├── AuthService.java
+   │   └── UserService.java
+   │
+   ├── Controller
+   │   ├── AuthController.java
+   │   └── UserController.java
+   │
+   ├── DTO
+   │   ├── request/auth/
+   │   │   ├── RegisterRequest.java
+   │   │   ├── LoginRequest.java
+   │   │   └── RefreshTokenRequest.java
+   │   └── response/auth/
+   │       ├── AuthResponse.java
+   │       └── UserResponse.java
+   │
+   └── Flyway Migration
+       └── V1__create_users_table.sql
+
+2. CHAT & WEBSOCKET (Học mới - WebSocket)
+   ├── Config
+   │   └── WebSocketConfig.java
+   │
+   ├── Domain/Entity
+   │   ├── Room.java
+   │   ├── RoomParticipant.java
+   │   └── Message.java
+   │
+   ├── Domain/Enums
+   │   ├── RoomType.java
+   │   └── MessageType.java
+   │
+   ├── Repository
+   │   ├── RoomRepository.java
+   │   └── MessageRepository.java
+   │
+   ├── Service
+   │   ├── RoomService.java
+   │   └── MessageService.java
+   │
+   ├── Controller
+   │   ├── RoomController.java
+   │   └── MessageController.java
+   │
+   ├── WebSocket
+   │   └── ChatWebSocketHandler.java
+   │
+   ├── DTO
+   │   ├── request/chat/
+   │   │   ├── SendMessageRequest.java
+   │   │   └── CreateRoomRequest.java
+   │   └── response/chat/
+   │       ├── MessageResponse.java
+   │       └── RoomResponse.java
+   │
+   └── Flyway Migration
+       ├── V5__create_rooms_table.sql
+       ├── V6__create_room_participants_table.sql
+       └── V7__create_messages_table.sql
+
+3. NOTIFICATION & KAFKA (Học mới - Kafka)
+   ├── Config
+   │   └── KafkaConfig.java
+   │
+   ├── Domain/Entity
+   │   └── Notification.java
+   │
+   ├── Domain/Enums
+   │   └── NotificationType.java
+   │
+   ├── Repository
+   │   └── NotificationRepository.java
+   │
+   ├── Service
+   │   └── NotificationService.java
+   │
+   ├── Controller
+   │   └── NotificationController.java
+   │
+   ├── Infrastructure/Messaging
+   │   ├── producer/
+   │   │   └── NotificationProducer.java
+   │   └── consumer/
+   │       └── NotificationConsumer.java
+   │
+   ├── WebSocket
+   │   └── NotificationWebSocketHandler.java
+   │
+   └── Flyway Migration
+       └── V8__create_notifications_table.sql
+
+4. EXCEPTION HANDLING (Shared)
+   └── Presentation/Exception
+       ├── GlobalExceptionHandler.java
+       ├── ResourceNotFoundException.java
+       ├── UnauthorizedException.java
+       └── ValidationException.java
+
+TỔNG KẾT TÚ:
+- 3 Entities: User, Room, RoomParticipant, Message, Notification (5)
+- Authentication & Security (Core feature)
+- WebSocket cho Chat & Notification (Học mới)
+- Kafka cho Notification (Học mới)
+- Exception Handling
+
+
+================================================================================
+TRUNG - POSTS, FRIENDS, GROUPS & MEDIA
+================================================================================
+
+1. POSTS & COMMENTS (Core Social Feature)
+   ├── Domain/Entity
+   │   ├── Post.java
+   │   ├── Comment.java
+   │   ├── Like.java
+   │   └── Media.java (PostMedia)
+   │
+   ├── Domain/Enums
+   │   └── PostPrivacy.java
+   │
+   ├── Repository
+   │   ├── PostRepository.java
+   │   ├── CommentRepository.java
+   │   └── MediaRepository.java
+   │
+   ├── Service
+   │   ├── PostService.java
+   │   ├── CommentService.java
+   │   └── MediaService.java
+   │
+   ├── Controller
+   │   ├── PostController.java
+   │   ├── CommentController.java
+   │   └── MediaController.java
+   │
+   ├── DTO
+   │   ├── request/post/
+   │   │   ├── CreatePostRequest.java
+   │   │   └── UpdatePostRequest.java
+   │   └── response/post/
+   │       └── PostResponse.java
+   │
+   └── Flyway Migration
+       ├── V2__create_posts_table.sql
+       ├── V3__create_comments_table.sql
+       ├── V4__create_likes_table.sql
+       └── V9__create_media_table.sql
+
+2. FRIENDSHIPS (Social Connection)
+   ├── Domain/Entity
+   │   └── Friendship.java
+   │
+   ├── Domain/Enums
+   │   └── FriendshipStatus.java
+   │
+   ├── Repository
+   │   └── FriendshipRepository.java
+   │
+   ├── Service
+   │   └── FriendshipService.java
+   │
+   ├── Controller
+   │   └── FriendshipController.java
+   │
+   ├── DTO
+   │   └── request/friend/
+   │       └── FriendRequestDto.java
+   │
+   └── Flyway Migration
+       └── V10__create_friendships_table.sql
+
+3. GROUPS (Community Feature)
+   ├── Domain/Entity
+   │   ├── Group.java
+   │   └── GroupMember.java
+   │
+   ├── Repository
+   │   └── GroupRepository.java
+   │
+   ├── Service
+   │   └── GroupService.java
+   │
+   ├── Controller
+   │   └── GroupController.java
+   │
+   └── Flyway Migration
+       ├── V11__create_groups_table.sql
+       └── V12__create_group_members_table.sql
+
+4. REDIS CACHE (Học mới - Caching)
+   ├── Config
+   │   └── RedisConfig.java
+   │
+   └── Infrastructure/Cache
+       ├── RedisCacheService.java
+       └── CacheKeyGenerator.java
+
+5. CLOUDINARY STORAGE (Học mới - File Upload)
+   ├── Config
+   │   └── CloudinaryConfig.java
+   │
+   └── Infrastructure/Storage
+       ├── CloudinaryStorageService.java
+       └── LocalStorageService.java
+
+6. EMAIL SERVICE & KAFKA (Học mới - Kafka)
+   └── Infrastructure
+       ├── messaging/
+       │   ├── producer/
+       │   │   └── EmailProducer.java
+       │   └── consumer/
+       │       └── EmailConsumer.java
+       └── external/
+           └── EmailService.java
+
+7. COMMON DTOs (Shared)
+   └── DTO/Response/Common
+       ├── ApiResponse.java
+       └── PageResponse.java
+
+8. MAPPERS (Shared)
+   └── Application/Mapper
+       ├── UserMapper.java
+       ├── PostMapper.java
+       └── MessageMapper.java
+
+TỔNG KẾT TRUNG:
+- 7 Entities: Post, Comment, Like, Media, Friendship, Group, GroupMember (7)
+- Posts & Comments (Core social feature)
+- Friendships & Groups (Social connections)
+- Redis Cache (Học mới)
+- Cloudinary Storage (Học mới)
+- Kafka cho Email (Học mới)
+- Common DTOs & Mappers
+
+
+================================================================================
+CHIA SẺ CHUNG (Cả 2 cùng làm)
+================================================================================
+
+1. DOMAIN EVENTS
+   ├── UserRegisteredEvent.java      → Tú
+   ├── PostCreatedEvent.java          → Trung
+   ├── MessageSentEvent.java          → Tú
+   └── FriendRequestEvent.java        → Trung
+
+2. VALIDATORS
+   ├── PasswordValidator.java         → Tú
+   └── FileValidator.java             → Trung
+
+
+================================================================================
+THỐNG KÊ PHÂN CÔNG
+================================================================================
+
+TÚ:
+- Entities: 5 (User, Room, RoomParticipant, Message, Notification)
+- Controllers: 5 (Auth, User, Room, Message, Notification)
+- Services: 5
+- Kiến thức mới: WebSocket, Kafka (Notification)
+- Đặc thù: Authentication & Security (Core)
+
+TRUNG:
+- Entities: 7 (Post, Comment, Like, Media, Friendship, Group, GroupMember)
+- Controllers: 5 (Post, Comment, Media, Friendship, Group)
+- Services: 6
+- Kiến thức mới: Redis Cache, Cloudinary, Kafka (Email)
+- Đặc thù: Social Features (Posts, Friends, Groups)
+
+CÁCH LÀM VIỆC:
+1. Tú setup Security & Auth trước (vì các API khác cần JWT)
+2. Trung setup Redis & Cloudinary config
+3. Sau đó cả 2 làm song song các feature của mình
+4. Tú làm WebSocket cho Chat
+5. Trung làm Posts & Comments
+6. Cả 2 cùng học Kafka và implement phần của mình
+7. Cuối cùng integrate và test
+
+LƯU Ý:
+- Tú làm xong Auth thì Trung mới test được các API
+- Cả 2 cùng học WebSocket và Kafka (kiến thức mới)
+- Trung làm nhiều Entity hơn nhưng đơn giản hơn
+- Tú làm ít Entity hơn nhưng phức tạp hơn (Security, WebSocket)
+- Cân bằng về độ khó và khối lượng công việc
+
+================================================================================
