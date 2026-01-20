@@ -1,3 +1,82 @@
 spring:
   application:
     name: social
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/socialmedia
+    username: admin
+    password: admin123
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  
+  kafka:
+    bootstrap-servers: localhost:9092
+  
+  mail:
+    host: localhost
+    port: 1025
+  
+  # OAuth2 (Google, Facebook)
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
+            scope: email,profile
+          facebook:
+            client-id: ${FACEBOOK_CLIENT_ID:your-facebook-client-id}
+            client-secret: ${FACEBOOK_CLIENT_SECRET:your-facebook-client-secret}
+            scope: email,public_profile
+  
+  # File upload
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+server:
+  port: 8080
+
+# JWT
+jwt:
+  secret: your-secret-key-must-be-at-least-256-bits-long-for-HS256
+  access-token-expiration: 900000
+  refresh-token-expiration: 604800000
+
+# Cloudinary
+cloudinary:
+  cloud-name: your-cloud-name
+  api-key: your-api-key
+  api-secret: your-api-secret
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.aht.social: DEBUG

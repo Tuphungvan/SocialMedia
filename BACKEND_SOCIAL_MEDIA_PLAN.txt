@@ -1,0 +1,901 @@
+================================================================================
+KẾ HOẠCH BACKEND - DỰ ÁN SOCIAL MEDIA
+Spring Boot 3.x + Docker + PostgreSQL + Redis + Kafka
+================================================================================
+
+
+II. KIẾN TRÚC ĐỀ XUẤT - CLEAN ARCHITECTURE
+================================================================================
+
+1. LAYERED ARCHITECTURE:
+   
+   ┌─────────────────────────────────────────────────────────────┐
+   │                    PRESENTATION LAYER                        │
+   │  - REST Controllers (API endpoints)                          │
+   │  - WebSocket Controllers (Real-time chat)                    │
+   │  - Request/Response DTOs                                     │
+   │  - Global Exception Handler                                  │
+   │  - Security Filters (JWT, CORS)                              │
+   └─────────────────────────────────────────────────────────────┘
+                              ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │                     APPLICATION LAYER                        │
+   │  - Use Cases / Services                                      │
+   │  - Business Logic                                            │
+   │  - Validation                                                │
+   │  - Mappers (Entity ↔ DTO)                                    │
+   └─────────────────────────────────────────────────────────────┘
+                              ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │                      DOMAIN LAYER                            │
+   │  - Entities (JPA)                                            │
+   │  - Repository Interfaces                                     │
+   │  - Domain Events                                             │
+   │  - Value Objects                                             │
+   └─────────────────────────────────────────────────────────────┘
+                              ↓
+   ┌─────────────────────────────────────────────────────────────┐
+   │                   INFRASTRUCTURE LAYER                       │
+   │  - Repository Implementations                                │
+   │  - External Services (S3, Email, SMS)                        │
+   │  - Kafka Producers/Consumers                                 │
+   │  - Redis Cache                                               │
+   │  - File Storage                                              │
+   └─────────────────────────────────────────────────────────────┘
+
+
+III. CẤU TRÚC THỨ MỤC ĐỀ XUẤT
+================================================================================
+
+src/
+├── main/
+│   ├── java/com/socialmedia/
+│   │   ├── config/                          # Configuration classes
+│   │   │   ├── SecurityConfig.java          # Spring Security
+│   │   │   ├── RedisConfig.java             # Redis cache
+│   │   │   ├── KafkaConfig.java             # Kafka messaging
+│   │   │   ├── WebSocketConfig.java         # WebSocket cho chat
+│   │   │   ├── SwaggerConfig.java           # API documentation
+│   │   │   ├── CloudinaryConfig.java        # Cloudinary storage
+│   │   │   └── CorsConfig.java              # CORS policy
+│   │   │
+│   │   ├── domain/                          # Domain layer
+│   │   │   ├── entity/                      # JPA Entities
+│   │   │   │   ├── User.java
+│   │   │   │   ├── Post.java
+│   │   │   │   ├── Comment.java
+│   │   │   │   ├── Like.java
+│   │   │   │   ├── Friendship.java
+│   │   │   │   ├── Group.java
+│   │   │   │   ├── GroupMember.java
+│   │   │   │   ├── Room.java
+│   │   │   │   ├── RoomParticipant.java
+│   │   │   │   ├── Message.java
+│   │   │   │   ├── Notification.java
+│   │   │   │   └── Media.java
+│   │   │   │
+│   │   │   ├── repository/                  # Repository interfaces
+│   │   │   │   ├── UserRepository.java
+│   │   │   │   ├── PostRepository.java
+│   │   │   │   ├── CommentRepository.java
+│   │   │   │   ├── FriendshipRepository.java
+│   │   │   │   ├── GroupRepository.java
+│   │   │   │   ├── RoomRepository.java
+│   │   │   │   ├── MessageRepository.java
+│   │   │   │   └── NotificationRepository.java
+│   │   │   │
+│   │   │   ├── enums/                       # Enumerations
+│   │   │   │   ├── FriendshipStatus.java    # PENDING, ACCEPTED, BLOCKED
+│   │   │   │   ├── PostPrivacy.java         # PUBLIC, FRIENDS, PRIVATE
+│   │   │   │   ├── RoomType.java            # PRIVATE, GROUP, CHANNEL
+│   │   │   │   ├── MessageType.java         # TEXT, IMAGE, VIDEO, FILE
+│   │   │   │   └── NotificationType.java
+│   │   │   │
+│   │   │   └── event/                       # Domain events
+│   │   │       ├── UserRegisteredEvent.java
+│   │   │       ├── PostCreatedEvent.java
+│   │   │       ├── MessageSentEvent.java
+│   │   │       └── FriendRequestEvent.java
+│   │   │
+│   │   ├── application/                     # Application layer
+│   │   │   ├── dto/                         # Data Transfer Objects
+│   │   │   │   ├── request/
+│   │   │   │   │   ├── auth/
+│   │   │   │   │   │   ├── RegisterRequest.java
+│   │   │   │   │   │   ├── LoginRequest.java
+│   │   │   │   │   │   └── RefreshTokenRequest.java
+│   │   │   │   │   ├── post/
+│   │   │   │   │   │   ├── CreatePostRequest.java
+│   │   │   │   │   │   └── UpdatePostRequest.java
+│   │   │   │   │   ├── chat/
+│   │   │   │   │   │   ├── SendMessageRequest.java
+│   │   │   │   │   │   └── CreateRoomRequest.java
+│   │   │   │   │   └── friend/
+│   │   │   │   │       └── FriendRequestDto.java
+│   │   │   │   │
+│   │   │   │   └── response/
+│   │   │   │       ├── auth/
+│   │   │   │       │   ├── AuthResponse.java
+│   │   │   │       │   └── UserResponse.java
+│   │   │   │       ├── post/
+│   │   │   │       │   └── PostResponse.java
+│   │   │   │       ├── chat/
+│   │   │   │       │   ├── MessageResponse.java
+│   │   │   │       │   └── RoomResponse.java
+│   │   │   │       └── common/
+│   │   │   │           ├── ApiResponse.java
+│   │   │   │           └── PageResponse.java
+│   │   │   │
+│   │   │   ├── service/                     # Business logic
+│   │   │   │   ├── AuthService.java
+│   │   │   │   ├── UserService.java
+│   │   │   │   ├── PostService.java
+│   │   │   │   ├── CommentService.java
+│   │   │   │   ├── FriendshipService.java
+│   │   │   │   ├── GroupService.java
+│   │   │   │   ├── RoomService.java
+│   │   │   │   ├── MessageService.java
+│   │   │   │   ├── NotificationService.java
+│   │   │   │   └── MediaService.java
+│   │   │   │
+│   │   │   ├── mapper/                      # Entity ↔ DTO mappers
+│   │   │   │   ├── UserMapper.java
+│   │   │   │   ├── PostMapper.java
+│   │   │   │   └── MessageMapper.java
+│   │   │   │
+│   │   │   └── validator/                   # Custom validators
+│   │   │       ├── PasswordValidator.java
+│   │   │       └── FileValidator.java
+│   │   │
+│   │   ├── presentation/                    # Presentation layer
+│   │   │   ├── controller/                  # REST Controllers
+│   │   │   │   ├── AuthController.java
+│   │   │   │   ├── UserController.java
+│   │   │   │   ├── PostController.java
+│   │   │   │   ├── CommentController.java
+│   │   │   │   ├── FriendshipController.java
+│   │   │   │   ├── GroupController.java
+│   │   │   │   ├── RoomController.java
+│   │   │   │   ├── MessageController.java
+│   │   │   │   └── NotificationController.java
+│   │   │   │
+│   │   │   ├── websocket/                   # WebSocket handlers
+│   │   │   │   ├── ChatWebSocketHandler.java
+│   │   │   │   └── NotificationWebSocketHandler.java
+│   │   │   │
+│   │   │   └── exception/                   # Exception handling
+│   │   │       ├── GlobalExceptionHandler.java
+│   │   │       ├── ResourceNotFoundException.java
+│   │   │       ├── UnauthorizedException.java
+│   │   │       └── ValidationException.java
+│   │   │
+│   │   ├── infrastructure/                  # Infrastructure layer
+│   │   │   ├── security/                    # Security components
+│   │   │   │   ├── JwtTokenProvider.java
+│   │   │   │   ├── JwtAuthenticationFilter.java
+│   │   │   │   ├── CustomUserDetailsService.java
+│   │   │   │   └── SecurityUtils.java
+│   │   │   │
+│   │   │   ├── cache/                       # Cache implementations
+│   │   │   │   ├── RedisCacheService.java
+│   │   │   │   └── CacheKeyGenerator.java
+│   │   │   │
+│   │   │   ├── messaging/                   # Kafka messaging
+│   │   │   │   ├── producer/
+│   │   │   │   │   ├── NotificationProducer.java
+│   │   │   │   │   └── EmailProducer.java
+│   │   │   │   └── consumer/
+│   │   │   │       ├── NotificationConsumer.java
+│   │   │   │       └── EmailConsumer.java
+│   │   │   │
+│   │   │   ├── storage/                     # File storage
+│   │   │   │   ├── CloudinaryStorageService.java
+│   │   │   │   └── LocalStorageService.java
+│   │   │   │
+│   │   │   └── external/                    # External services
+│   │   │       ├── EmailService.java
+│   │   │       ├── SmsService.java
+│   │   │       └── PushNotificationService.java
+│   │   │
+│   │   └── SocialMediaApplication.java      # Main application
+│   │
+│   └── resources/
+│       ├── application.yml                  # Main config
+│       ├── application-dev.yml              # Dev environment
+│       ├── application-prod.yml             # Production
+│       ├── db/migration/                    # Flyway migrations
+│       │   ├── V1__create_users_table.sql
+│       │   ├── V2__create_posts_table.sql
+│       │   └── V3__create_messages_table.sql
+│       └── static/
+│
+└── test/
+    └── java/com/socialmedia/
+        ├── integration/                     # Integration tests
+        └── unit/                            # Unit tests
+
+
+IV. DEPENDENCIES (pom.xml)
+================================================================================
+
+1. CORE SPRING BOOT:
+   - spring-boot-starter-web (3.4.x)
+   - spring-boot-starter-data-jpa
+   - spring-boot-starter-validation
+   - spring-boot-starter-security
+   - spring-boot-starter-websocket
+   - spring-boot-starter-actuator (monitoring)
+
+2. DATABASE:
+   - postgresql (driver)
+   - flyway-core (database migration)
+   - spring-boot-starter-data-redis
+   - redis.clients:jedis
+
+3. SECURITY:
+   - io.jsonwebtoken:jjwt-api:0.12.5 (JWT mới nhất)
+   - io.jsonwebtoken:jjwt-impl:0.12.5
+   - io.jsonwebtoken:jjwt-jackson:0.12.5
+   - spring-security-oauth2-client (Google/Facebook login)
+   - spring-security-oauth2-resource-server
+
+4. MESSAGING:
+   - spring-kafka
+   - spring-boot-starter-mail
+
+5. MEDIA STORAGE:
+   - com.cloudinary:cloudinary-http44:1.39.0 (Cloudinary - Free tier)
+   - com.cloudinary:cloudinary-taglib:1.39.0
+
+6. DOCUMENTATION:
+   - springdoc-openapi-starter-webmvc-ui:2.8.4 (Swagger/OpenAPI)
+
+7. UTILITIES:
+   - org.mapstruct:mapstruct:1.6.3 (DTO mapping)
+   - org.projectlombok:lombok
+   - com.google.guava:guava:33.0.0-jre
+   - org.apache.commons:commons-lang3
+
+8. MONITORING & LOGGING:
+   - micrometer-registry-prometheus (metrics)
+   - net.logstash.logback:logstash-logback-encoder (structured logging)
+
+9. TESTING:
+   - spring-boot-starter-test
+   - spring-security-test
+   - testcontainers (PostgreSQL, Redis, Kafka containers)
+   - rest-assured (API testing)
+
+10. RATE LIMITING:
+    - bucket4j-core:8.x (rate limiting)
+    - bucket4j-redis
+
+
+V. DOCKER INFRASTRUCTURE
+================================================================================
+
+1. DOCKER-COMPOSE.YML (Development):
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: socialmedia
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Zookeeper (for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MailHog (Email testing - for development)
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  # Grafana (Monitoring Dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  postgres_data:
+  redis_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  prometheus_data:
+  grafana_data:
+
+
+2. DOCKERFILE (Multi-stage build):
+
+# Build stage
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+3. .DOCKERIGNORE:
+target/
+.mvn/
+*.iml
+.idea/
+.git/
+
+
+VI. DATABASE SCHEMA DESIGN
+================================================================================
+
+1. USERS TABLE:
+   - id (UUID, PK)
+   - username (VARCHAR, UNIQUE, NOT NULL)
+   - email (VARCHAR, UNIQUE, NOT NULL)
+   - password_hash (VARCHAR)
+   - phone_number (VARCHAR)
+   - avatar_url (VARCHAR)
+   - cover_photo_url (VARCHAR)
+   - bio (TEXT)
+   - date_of_birth (DATE)
+   - gender (ENUM)
+   - is_verified (BOOLEAN)
+   - is_active (BOOLEAN)
+   - google_id (VARCHAR, UNIQUE)
+   - facebook_id (VARCHAR, UNIQUE)
+   - last_login_at (TIMESTAMP)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+   - INDEXES: username, email, google_id, facebook_id
+
+2. POSTS TABLE:
+   - id (UUID, PK)
+   - user_id (UUID, FK → users)
+   - content (TEXT)
+   - privacy (ENUM: PUBLIC, FRIENDS, PRIVATE)
+   - location (VARCHAR)
+   - feeling (VARCHAR)
+   - is_edited (BOOLEAN)
+   - likes_count (INT, default 0)
+   - comments_count (INT, default 0)
+   - shares_count (INT, default 0)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+   - INDEXES: user_id, created_at, privacy
+
+3. POST_MEDIA TABLE:
+   - id (UUID, PK)
+   - post_id (UUID, FK → posts)
+   - media_type (ENUM: IMAGE, VIDEO)
+   - media_url (VARCHAR)
+   - thumbnail_url (VARCHAR)
+   - order_index (INT)
+   - created_at (TIMESTAMP)
+
+4. COMMENTS TABLE:
+   - id (UUID, PK)
+   - post_id (UUID, FK → posts)
+   - user_id (UUID, FK → users)
+   - parent_comment_id (UUID, FK → comments, nullable)
+   - content (TEXT)
+   - likes_count (INT, default 0)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+   - INDEXES: post_id, user_id, parent_comment_id
+
+5. LIKES TABLE:
+   - id (UUID, PK)
+   - user_id (UUID, FK → users)
+   - target_type (ENUM: POST, COMMENT)
+   - target_id (UUID)
+   - created_at (TIMESTAMP)
+   - UNIQUE: (user_id, target_type, target_id)
+   - INDEXES: target_type + target_id
+
+6. FRIENDSHIPS TABLE:
+   - id (UUID, PK)
+   - requester_id (UUID, FK → users)
+   - addressee_id (UUID, FK → users)
+   - status (ENUM: PENDING, ACCEPTED, BLOCKED)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+   - UNIQUE: (requester_id, addressee_id)
+   - INDEXES: requester_id, addressee_id, status
+
+7. GROUPS TABLE:
+   - id (UUID, PK)
+   - name (VARCHAR)
+   - description (TEXT)
+   - avatar_url (VARCHAR)
+   - cover_photo_url (VARCHAR)
+   - privacy (ENUM: PUBLIC, PRIVATE)
+   - creator_id (UUID, FK → users)
+   - members_count (INT, default 0)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+
+8. GROUP_MEMBERS TABLE:
+   - id (UUID, PK)
+   - group_id (UUID, FK → groups)
+   - user_id (UUID, FK → users)
+   - role (ENUM: ADMIN, MODERATOR, MEMBER)
+   - joined_at (TIMESTAMP)
+   - UNIQUE: (group_id, user_id)
+
+9. ROOMS TABLE (Chat):
+   - id (UUID, PK)
+   - name (VARCHAR, nullable)
+   - type (ENUM: PRIVATE, GROUP, CHANNEL)
+   - avatar_url (VARCHAR)
+   - creator_id (UUID, FK → users)
+   - last_message_at (TIMESTAMP)
+   - created_at (TIMESTAMP)
+   - updated_at (TIMESTAMP)
+
+10. ROOM_PARTICIPANTS TABLE:
+    - id (UUID, PK)
+    - room_id (UUID, FK → rooms)
+    - user_id (UUID, FK → users)
+    - role (ENUM: ADMIN, MEMBER)
+    - is_muted (BOOLEAN)
+    - last_read_at (TIMESTAMP)
+    - joined_at (TIMESTAMP)
+    - UNIQUE: (room_id, user_id)
+
+11. MESSAGES TABLE:
+    - id (UUID, PK)
+    - room_id (UUID, FK → rooms)
+    - sender_id (UUID, FK → users)
+    - content (TEXT)
+    - message_type (ENUM: TEXT, IMAGE, VIDEO, FILE, AUDIO)
+    - media_url (VARCHAR)
+    - reply_to_id (UUID, FK → messages, nullable)
+    - is_edited (BOOLEAN)
+    - is_deleted (BOOLEAN)
+    - created_at (TIMESTAMP)
+    - updated_at (TIMESTAMP)
+    - INDEXES: room_id + created_at, sender_id
+
+12. NOTIFICATIONS TABLE:
+    - id (UUID, PK)
+    - user_id (UUID, FK → users)
+    - type (ENUM: LIKE, COMMENT, FRIEND_REQUEST, MESSAGE, etc.)
+    - actor_id (UUID, FK → users)
+    - target_type (VARCHAR)
+    - target_id (UUID)
+    - content (TEXT)
+    - is_read (BOOLEAN)
+    - created_at (TIMESTAMP)
+    - INDEXES: user_id + is_read + created_at
+
+
+VII. API ENDPOINTS DESIGN
+================================================================================
+
+1. AUTHENTICATION (/api/v1/auth):
+   POST   /register              - Đăng ký
+   POST   /login                 - Đăng nhập
+   POST   /logout                - Đăng xuất
+   POST   /refresh-token         - Refresh JWT token
+   POST   /oauth/google          - Login Google
+   POST   /oauth/facebook        - Login Facebook
+   POST   /forgot-password       - Quên mật khẩu
+   POST   /reset-password        - Reset mật khẩu
+   POST   /verify-email          - Xác thực email
+
+2. USER MANAGEMENT (/api/v1/users):
+   GET    /me                    - Thông tin user hiện tại
+   PUT    /me                    - Cập nhật profile
+   PUT    /me/password           - Đổi mật khẩu
+   PUT    /me/avatar             - Upload avatar
+   GET    /{userId}              - Xem profile user khác
+   GET    /search                - Tìm kiếm user
+
+3. POSTS (/api/v1/posts):
+   POST   /                      - Tạo bài viết
+   GET    /                      - Lấy danh sách bài viết (newsfeed)
+   GET    /{postId}              - Chi tiết bài viết
+   PUT    /{postId}              - Sửa bài viết
+   DELETE /{postId}              - Xóa bài viết
+   POST   /{postId}/like         - Like bài viết
+   DELETE /{postId}/like         - Unlike bài viết
+   GET    /{postId}/likes        - Danh sách người like
+   POST   /{postId}/share        - Chia sẻ bài viết
+   GET    /user/{userId}         - Bài viết của user
+
+4. COMMENTS (/api/v1/posts/{postId}/comments):
+   POST   /                      - Thêm comment
+   GET    /                      - Lấy danh sách comments
+   PUT    /{commentId}           - Sửa comment
+   DELETE /{commentId}           - Xóa comment
+   POST   /{commentId}/like      - Like comment
+   POST   /{commentId}/reply     - Reply comment
+
+5. FRIENDSHIPS (/api/v1/friends):
+   POST   /request               - Gửi lời mời kết bạn
+   PUT    /accept/{requestId}    - Chấp nhận lời mời
+   DELETE /reject/{requestId}    - Từ chối lời mời
+   DELETE /unfriend/{userId}     - Hủy kết bạn
+   GET    /                      - Danh sách bạn bè
+   GET    /requests              - Lời mời kết bạn
+   GET    /suggestions           - Gợi ý kết bạn
+   POST   /block/{userId}        - Chặn user
+   DELETE /unblock/{userId}      - Bỏ chặn
+
+6. GROUPS (/api/v1/groups):
+   POST   /                      - Tạo nhóm
+   GET    /                      - Danh sách nhóm
+   GET    /{groupId}             - Chi tiết nhóm
+   PUT    /{groupId}             - Cập nhật nhóm
+   DELETE /{groupId}             - Xóa nhóm
+   POST   /{groupId}/join        - Tham gia nhóm
+   DELETE /{groupId}/leave       - Rời nhóm
+   GET    /{groupId}/members     - Danh sách thành viên
+   POST   /{groupId}/posts       - Đăng bài trong nhóm
+   GET    /{groupId}/posts       - Bài viết trong nhóm
+
+7. CHAT ROOMS (/api/v1/rooms):
+   POST   /                      - Tạo phòng chat
+   GET    /                      - Danh sách phòng
+   GET    /{roomId}              - Chi tiết phòng
+   PUT    /{roomId}              - Cập nhật phòng
+   DELETE /{roomId}              - Xóa phòng
+   POST   /{roomId}/members      - Thêm thành viên
+   DELETE /{roomId}/members/{userId} - Xóa thành viên
+   GET    /{roomId}/messages     - Lịch sử tin nhắn
+
+8. MESSAGES (/api/v1/messages):
+   POST   /                      - Gửi tin nhắn
+   GET    /{messageId}           - Chi tiết tin nhắn
+   PUT    /{messageId}           - Sửa tin nhắn
+   DELETE /{messageId}           - Xóa tin nhắn
+   POST   /{messageId}/react     - React tin nhắn
+
+9. NOTIFICATIONS (/api/v1/notifications):
+   GET    /                      - Danh sách thông báo
+   PUT    /{notificationId}/read - Đánh dấu đã đọc
+   PUT    /read-all              - Đánh dấu tất cả đã đọc
+   DELETE /{notificationId}      - Xóa thông báo
+
+10. MEDIA (/api/v1/media):
+    POST   /upload               - Upload file
+    DELETE /{mediaId}            - Xóa file
+
+
+VIII. BEST PRACTICES & PATTERNS
+================================================================================
+
+1. SECURITY BEST PRACTICES:
+   - JWT với Access Token (15 phút) + Refresh Token (7 ngày)
+   - Password: BCrypt với cost factor 12
+   - Rate limiting: 100 requests/phút/IP
+   - CORS: Whitelist domains cụ thể
+   - Input validation: Bean Validation + Custom validators
+   - SQL Injection: Sử dụng JPA/JPQL
+   - XSS Protection: Content Security Policy headers
+   - HTTPS only trong production
+
+2. CACHING STRATEGY:
+   - User profile: Cache 1 giờ
+   - Posts newsfeed: Cache 5 phút
+   - Friend list: Cache 30 phút
+   - Notifications count: Cache 1 phút
+   - Cache invalidation: Event-driven (Kafka)
+
+3. DATABASE OPTIMIZATION:
+   - Indexes: Tất cả foreign keys, search fields
+   - Pagination: Cursor-based cho infinite scroll
+   - N+1 Query: Sử dụng @EntityGraph, JOIN FETCH
+   - Connection pooling: HikariCP (default)
+   - Read replicas: Cho queries nặng
+
+4. ASYNC PROCESSING (Kafka):
+   - Email notifications
+   - Push notifications
+   - Activity logging
+   - Analytics events
+   - Image/video processing
+
+5. FILE STORAGE:
+   - Cloudinary (Free tier: 25GB storage, 25GB bandwidth/tháng)
+   - Image optimization: Auto resize, compress, format conversion
+   - CDN: Cloudinary CDN (built-in, global)
+   - Video: Cloudinary video support (free tier: 500MB)
+   - Max file size: 10MB cho ảnh, 100MB cho video
+   - Transformations: On-the-fly resize, crop, filters
+
+6. ERROR HANDLING:
+   - Global exception handler
+   - Structured error responses
+   - Error codes chuẩn
+   - Logging với correlation ID
+   - Stack trace chỉ trong dev environment
+
+7. LOGGING:
+   - Structured logging (JSON format)
+   - Log levels: ERROR, WARN, INFO, DEBUG
+   - Correlation ID cho mỗi request
+   - Sensitive data masking
+   - Centralized logging (ELK stack hoặc CloudWatch)
+
+8. MONITORING:
+   - Prometheus metrics
+   - Grafana dashboards
+   - Health checks: /actuator/health
+   - Custom metrics: API latency, error rates
+   - Alerts: Slack/Email integration
+
+9. TESTING STRATEGY:
+   - Unit tests: Service layer (80% coverage)
+   - Integration tests: API endpoints với Testcontainers
+   - E2E tests: Critical user flows
+   - Load testing: JMeter hoặc Gatling
+   - Security testing: OWASP ZAP
+
+10. API VERSIONING:
+    - URL versioning: /api/v1, /api/v2
+    - Backward compatibility: Maintain 2 versions
+    - Deprecation warnings: Response headers
+    - Documentation: Swagger/OpenAPI
+
+
+IX. WEBSOCKET IMPLEMENTATION
+================================================================================
+
+1. CHAT WEBSOCKET:
+   - Endpoint: /ws/chat
+   - Authentication: JWT trong handshake
+   - Message format: JSON
+   - Topics:
+     * /topic/room/{roomId}     - Room messages
+     * /user/queue/private      - Private messages
+     * /user/queue/typing       - Typing indicators
+
+2. NOTIFICATION WEBSOCKET:
+   - Endpoint: /ws/notifications
+   - Real-time notifications
+   - Online status updates
+   - Presence system
+
+3. STOMP PROTOCOL:
+   - CONNECT: Authenticate user
+   - SUBSCRIBE: Join room/topic
+   - SEND: Send message
+   - DISCONNECT: Leave room
+
+
+X. DEPLOYMENT STRATEGY
+================================================================================
+
+1. DEVELOPMENT:
+   - Docker Compose: All services local
+   - Hot reload: Spring DevTools
+   - Database: PostgreSQL container
+   - Redis: Redis container
+   - Kafka: Kafka container
+
+2. STAGING:
+   - VPS/Dedicated Server (Contabo, Hetzner, DigitalOcean)
+   - Docker Swarm hoặc standalone Docker
+   - PostgreSQL (self-hosted)
+   - Redis (self-hosted)
+   - Kafka (self-hosted hoặc CloudKarafka free tier)
+   - CI/CD: GitHub Actions
+
+3. PRODUCTION:
+   - VPS/Cloud Server (Contabo, Hetzner, Linode)
+   - Docker Compose hoặc Docker Swarm
+   - Load balancer: Nginx/Traefik
+   - Database: PostgreSQL với replication
+   - Backup: Automated daily backups
+   - SSL: Let's Encrypt (free)
+   - CDN: Cloudflare (free tier)
+
+4. CI/CD PIPELINE:
+   - Build: Maven package
+   - Test: Unit + Integration tests
+   - Security scan: OWASP Dependency Check (free)
+   - Docker build: Multi-stage
+   - Push: Docker Hub (free tier) hoặc GitHub Container Registry
+   - Deploy: SSH + Docker Compose
+   - Smoke tests: Post-deployment
+
+
+XI. PERFORMANCE OPTIMIZATION
+================================================================================
+
+1. DATABASE:
+   - Connection pooling: HikariCP (max 20 connections)
+   - Query optimization: EXPLAIN ANALYZE
+   - Indexes: Composite indexes cho queries phức tạp
+   - Partitioning: Posts table theo tháng
+   - Archiving: Old data sang cold storage
+
+2. CACHING:
+   - L1 Cache: Caffeine (in-memory)
+   - L2 Cache: Redis (distributed)
+   - Cache-aside pattern
+   - Write-through cho critical data
+   - TTL strategy: Theo use case
+
+3. API:
+   - Pagination: Default 20 items
+   - Field filtering: GraphQL-style
+   - Compression: Gzip response
+   - HTTP/2: Multiplexing
+   - CDN: Static assets
+
+4. ASYNC PROCESSING:
+   - Kafka: Decouple heavy operations
+   - Thread pools: Separate pools cho tasks
+   - Batch processing: Notifications, emails
+   - Scheduled jobs: Cleanup, reports
+
+XIII. CÔNG CỤ & TECHNOLOGIES STACK
+================================================================================
+
+1. CORE:
+   - Java 21 (LTS)
+   - Spring Boot 3.4.x
+   - Maven 3.9+
+   - PostgreSQL 16
+   - Redis 7
+
+2. MESSAGING:
+   - Apache Kafka 7.4.0 (Confluent Platform - with Zookeeper)
+   - Spring Kafka
+
+3. STORAGE:
+   - Cloudinary (Free tier)
+   - Local storage (development fallback)
+
+4. SECURITY:
+   - Spring Security 6
+   - JWT (jjwt 0.12.5)
+   - OAuth2 (Google, Facebook)
+
+5. MONITORING:
+   - Prometheus
+   - Grafana
+   - Spring Boot Actuator
+   - Micrometer
+
+6. LOGGING:
+   - Logback
+   - Logstash encoder
+   - ELK Stack (optional)
+
+7. TESTING:
+   - JUnit 5
+   - Mockito
+   - Testcontainers
+   - REST Assured
+   - JMeter (load testing)
+
+8. DOCUMENTATION:
+   - Swagger/OpenAPI 3
+   - Springdoc
+
+9. DEVOPS:
+   - Docker
+   - Docker Compose / Docker Swarm
+   - GitHub Actions (free for public repos)
+   - Nginx (reverse proxy, load balancer)
+
+10. CODE QUALITY:
+    - SonarLint (IDE plugin - free)
+    - Checkstyle
+    - SpotBugs
+    - JaCoCo (coverage)
+
+================================================================================
+KẾT THÚC KẾ HOẠCH BACKEND
+================================================================================
+
+4. ERROR CODES CHUẨN:
+
+- VALIDATION_ERROR: Lỗi validation input
+- UNAUTHORIZED: Chưa đăng nhập
+- FORBIDDEN: Không có quyền
+- NOT_FOUND: Resource không tồn tại
+- ALREADY_EXISTS: Resource đã tồn tại (duplicate)
+- RATE_LIMIT_EXCEEDED: Vượt quá giới hạn requests
+- SERVER_ERROR: Lỗi server
+- SERVICE_UNAVAILABLE: Service tạm thời không khả dụng
+
+5. HTTP STATUS CODES:
+
+- 200 OK: Success
+- 201 Created: Resource created
+- 204 No Content: Success but no data to return
+- 400 Bad Request: Invalid input
+- 401 Unauthorized: Authentication required
+- 403 Forbidden: No permission
+- 404 Not Found: Resource not found
+- 409 Conflict: Resource already exists
+- 422 Unprocessable Entity: Validation error
+- 429 Too Many Requests: Rate limit exceeded
+- 500 Internal Server Error: Server error
+- 503 Service Unavailable: Service down
+
+
+
