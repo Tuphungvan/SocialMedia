@@ -169,6 +169,13 @@
 			<version>${logstash.version}</version>
 		</dependency>
 
+		<!-- JSpecify for null safety -->
+		<dependency>
+			<groupId>org.jspecify</groupId>
+			<artifactId>jspecify</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>

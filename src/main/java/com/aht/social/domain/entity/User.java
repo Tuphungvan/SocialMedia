@@ -9,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.aht.social.domain.enums.Gender;
+import com.aht.social.domain.enums.Role;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,8 +17,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users", indexes = {
-    @Index(name = "idx_username", columnList = "username"),
     @Index(name = "idx_email", columnList = "email"),
+    @Index(name = "idx_username", columnList = "username"),
     @Index(name = "idx_phone_number", columnList = "phone_number"),
     @Index(name = "idx_google_id", columnList = "google_id"),
     @Index(name = "idx_facebook_id", columnList = "facebook_id")
@@ -32,7 +33,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false, length = 50)
+    @Column(nullable = false, length = 50)
     private String username;
 
     @Column(unique = true, nullable = false, length = 50)
@@ -71,6 +72,11 @@ public class User {
     private String facebookId;
 
     private LocalDateTime lastLoginAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private Role role = Role.USER;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

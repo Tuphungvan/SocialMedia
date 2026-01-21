@@ -9,8 +9,12 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update  # ← Hibernate tự tạo/update bảng
     show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
   
   flyway:
     enabled: true
@@ -53,7 +57,7 @@ server:
 
 # JWT
 jwt:
-  secret: your-secret-key-must-be-at-least-256-bits-long-for-HS256
+  secret: qR8x2mMkPvL7wBcYdZfY3gJpS9uAeK4iXoV6nWpTyMsU=
   access-token-expiration: 900000
   refresh-token-expiration: 604800000
 
