@@ -1,0 +1,35 @@
+package com.aht.social.domain.enitity;
+
+import com.aht.social.domain.enums.GroupRole;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "group_members", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"group_id", "user_id"})
+})
+@Data
+public class GroupMember {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Enumerated(EnumType.STRING)
+    private GroupRole role; // ADMIN, MODERATOR, MEMBER
+
+    @CreationTimestamp
+    private LocalDateTime joinedAt;
+}
