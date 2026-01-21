@@ -1,4 +1,4 @@
-package com.aht.social.domain.enitity;
+package com.aht.social.domain.entity;
 
 import com.aht.social.domain.enums.PostPrivacy;
 import jakarta.persistence.*;

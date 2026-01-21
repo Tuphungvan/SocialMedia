@@ -1,13 +1,12 @@
 package com.aht.social.application.mapper;
 
-
-import com.aht.social.domain.enitity.Post;
+import com.aht.social.domain.entity.Post;
 import com.aht.social.application.dto.request.post.CreatePostRequestDTO;
 import com.aht.social.application.dto.request.post.UpdatePostRequestDTO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring", uses = {UserMapper.class})
+@Mapper(componentModel = "spring", uses = { UserMapper.class })
 public interface PostMapper {
 
     @Mapping(target = "userId", source = "user.id")

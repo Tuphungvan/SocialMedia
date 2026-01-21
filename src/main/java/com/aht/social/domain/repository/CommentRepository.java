@@ -1,6 +1,6 @@
 package com.aht.social.domain.repository;
 
-import com.aht.social.domain.enitity.Comment;
+import com.aht.social.domain.entity.Comment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

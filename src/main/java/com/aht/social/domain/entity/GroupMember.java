@@ -1,10 +1,9 @@
-package com.aht.social.domain.enitity;
+package com.aht.social.domain.entity;
 
 import com.aht.social.domain.enums.GroupRole;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

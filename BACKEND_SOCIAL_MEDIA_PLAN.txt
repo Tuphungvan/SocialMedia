@@ -270,162 +270,34 @@ IV. DEPENDENCIES (pom.xml)
     - bucket4j-core:8.x (rate limiting)
     - bucket4j-redis
 
-
-V. DOCKER INFRASTRUCTURE
-================================================================================
-
-1. DOCKER-COMPOSE.YML (Development):
-
-services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: socialmedia
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
-      TZ: Asia/Ho_Chi_Minh
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  # Zookeeper (for Kafka)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_logs:/var/lib/zookeeper/log
-
-  # Kafka Message Broker
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # MailHog (Email testing - for development)
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"  # SMTP server
-      - "8025:8025"  # Web UI
-
-  # Prometheus (Metrics)
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-
-  # Grafana (Monitoring Dashboard)
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-
-volumes:
-  postgres_data:
-  redis_data:
-  zookeeper_data:
-  zookeeper_logs:
-  kafka_data:
-  prometheus_data:
-  grafana_data:
-
-
-2. DOCKERFILE (Multi-stage build):
-
-# Build stage
-FROM maven:3.9-eclipse-temurin-21-alpine AS build
-WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:go-offline
-COPY src ./src
-RUN mvn clean package -DskipTests
-
-# Runtime stage
-FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
-
-3. .DOCKERIGNORE:
-target/
-.mvn/
-*.iml
-.idea/
-.git/
-
-
 VI. DATABASE SCHEMA DESIGN
 ================================================================================
 
 1. USERS TABLE:
    - id (UUID, PK)
-   - username (VARCHAR, UNIQUE, NOT NULL)
-   - email (VARCHAR, UNIQUE, NOT NULL)
-   - password_hash (VARCHAR)
-   - phone_number (VARCHAR)
-   - avatar_url (VARCHAR)
-   - cover_photo_url (VARCHAR)
+   - username (VARCHAR(50), UNIQUE, NOT NULL)
+   - email (VARCHAR(100), UNIQUE, NOT NULL)
+   - password_hash (VARCHAR(255), nullable - vì có OAuth)
+   - phone_number (VARCHAR(20), UNIQUE)
+   - avatar_url (VARCHAR(500))
+   - cover_photo_url (VARCHAR(500))
    - bio (TEXT)
    - date_of_birth (DATE)
-   - gender (ENUM)
-   - is_verified (BOOLEAN)
-   - is_active (BOOLEAN)
-   - google_id (VARCHAR, UNIQUE)
-   - facebook_id (VARCHAR, UNIQUE)
+   - gender (ENUM: MALE, FEMALE)
+   - is_verified (BOOLEAN, default false)
+   - is_active (BOOLEAN, default true)
+   - google_id (VARCHAR(100), UNIQUE)
+   - facebook_id (VARCHAR(100), UNIQUE)
    - last_login_at (TIMESTAMP)
-   - created_at (TIMESTAMP)
-   - updated_at (TIMESTAMP)
-   - INDEXES: username, email, google_id, facebook_id
+   - created_at (TIMESTAMP, NOT NULL, auto)
+   - updated_at (TIMESTAMP, auto)
+   - INDEXES: username, email, phone_number, google_id, facebook_id
+   
+   Entity Implementation:
+   - Không có @OneToMany (query qua Repository)
+   - @CreationTimestamp & @UpdateTimestamp (tự động)
+   - @Builder.Default cho isVerified, isActive
+   - UUID cho id (bảo mật, unique toàn cầu)
 
 2. POSTS TABLE:
    - id (UUID, PK)
