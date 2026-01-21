@@ -1,19 +1,27 @@
 package com.aht.social.application.mapper;
 
-import com.aht.social.domain.entity.Post;
 import com.aht.social.application.dto.request.post.CreatePostRequestDTO;
 import com.aht.social.application.dto.request.post.UpdatePostRequestDTO;
+import com.aht.social.application.dto.response.post.PostResponseDTO;
+import com.aht.social.domain.entity.Post;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring", uses = { UserMapper.class })
+@Mapper(componentModel = "spring", uses = { UserMapper.class, PostMediaMapper.class })
 public interface PostMapper {
 
-    @Mapping(target = "userId", source = "user.id")
-    @Mapping(target = "username", source = "user.username")
-    @Mapping(target = "userAvatar", source = "user.avatarUrl")
-    CreatePostRequestDTO toDTO(Post post);
+    PostResponseDTO toDTO(Post post);
 
-    @Mapping(target = "user", ignore = true) // User sẽ được set thủ công từ Security Context
-    Post toEntity(UpdatePostRequestDTO postDTO);
+    // Dùng cho API Create
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Post toCreateEntity(CreatePostRequestDTO createDTO);
+
+    // Dùng cho API Update
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Post toUpdateEntity(UpdatePostRequestDTO updateDTO);
 }
