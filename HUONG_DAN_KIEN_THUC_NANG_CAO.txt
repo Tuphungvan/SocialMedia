@@ -1,0 +1,1035 @@
+================================================================================
+HƯỚNG DẪN KIẾN THỨC NÂNG CAO - SOCIAL MEDIA BACKEND
+Giải thích như Senior cho Intern
+================================================================================
+
+MỤC LỤC:
+I.   JWT & SPRING SECURITY
+II.  WEBSOCKET & STOMP
+III. KAFKA MESSAGING
+IV.  REDIS CACHE
+V.   CLOUDINARY & FILE UPLOAD
+VI.  CLEAN ARCHITECTURE
+
+================================================================================
+I. JWT & SPRING SECURITY - XÁC THỰC NGƯỜI DÙNG
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+---------------------------
+Tình huống: User đăng nhập vào Facebook
+- Làm sao server biết request tiếp theo là của user nào?
+- Làm sao không phải đăng nhập lại mỗi lần refresh trang?
+- Làm sao bảo mật thông tin user?
+
+2. GIẢI PHÁP: JWT (JSON Web Token)
+----------------------------------
+JWT là 1 chuỗi string mã hóa chứa thông tin user.
+
+Ví dụ JWT:
+eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiIxMjMiLCJlbWFpbCI6InR1QGdtYWlsLmNvbSJ9.abc123xyz
+
+Cấu trúc JWT gồm 3 phần (ngăn cách bởi dấu .):
+- Header: Thuật toán mã hóa (HS256)
+- Payload: Dữ liệu user (userId, email, roles...)
+- Signature: Chữ ký bảo mật (dùng secret key)
+
+3. FLOW ĐĂNG NHẬP VỚI JWT
+-------------------------
+
+Bước 1: User gửi username + password
+POST /api/v1/auth/login
+{
+  "username": "tu@gmail.com",
+  "password": "123456"
+}
+
+Bước 2: Server kiểm tra password
+- Lấy user từ database
+- So sánh password (dùng BCrypt)
+- Nếu đúng → Tạo JWT token
+
+Bước 3: Server trả về JWT
+{
+  "accessToken": "eyJhbGci...",
+  "refreshToken": "xyz123...",
+  "expiresIn": 900000  // 15 phút
+}
+
+Bước 4: Client lưu token (localStorage hoặc cookie)
+
+Bước 5: Mỗi request sau, client gửi token trong header
+GET /api/v1/posts
+Headers:
+  Authorization: Bearer eyJhbGci...
+
+Bước 6: Server verify token
+- Giải mã JWT
+- Kiểm tra signature (có bị giả mạo không?)
+- Kiểm tra expiration (hết hạn chưa?)
+- Lấy userId từ token → Biết user nào đang request
+
+4. TẠI SAO CẦN 2 LOẠI TOKEN?
+-----------------------------
+Access Token (15 phút):
+- Dùng cho mọi API request
+- Thời gian ngắn → An toàn hơn nếu bị đánh cắp
+- Hết hạn nhanh → Phải refresh
+
+Refresh Token (7 ngày):
+- Chỉ dùng để lấy access token mới
+- Thời gian dài → User không phải đăng nhập lại
+- Lưu trong database → Có thể revoke (thu hồi)
+
+Flow Refresh Token:
+1. Access token hết hạn → API trả 401 Unauthorized
+2. Client gửi refresh token → POST /api/v1/auth/refresh-token
+3. Server kiểm tra refresh token trong DB
+4. Nếu hợp lệ → Tạo access token mới
+5. Client dùng access token mới tiếp tục
+
+5. SPRING SECURITY - BẢO VỆ API
+--------------------------------
+Spring Security là framework bảo mật, hoạt động như "cổng kiểm soát".
+
+
+Flow Request qua Spring Security:
+
+Request → JwtAuthenticationFilter → SecurityContext → Controller
+   ↓              ↓                        ↓              ↓
+ /api/v1/posts  Verify JWT          Lưu user info    Xử lý logic
+
+JwtAuthenticationFilter làm gì?
+1. Lấy token từ header: Authorization: Bearer xxx
+2. Verify token (JwtTokenProvider)
+3. Lấy userId từ token
+4. Load user từ DB (CustomUserDetailsService)
+5. Lưu vào SecurityContext (Spring biết user nào đang login)
+6. Cho request đi tiếp
+
+SecurityConfig.java - Cấu hình quyền truy cập:
+@Configuration
+public class SecurityConfig {
+    
+    // API nào không cần login?
+    public static final String[] PUBLIC_URLS = {
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/swagger-ui/**"
+    };
+    
+    // API nào cần login?
+    .requestMatchers("/api/v1/posts/**").authenticated()
+    
+    // API nào cần role ADMIN?
+    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+}
+
+6. MÃ HÓA PASSWORD - BCRYPT
+----------------------------
+KHÔNG BAO GIỜ lưu password dạng plain text!
+
+Sai: password = "123456" → Lưu vào DB
+Đúng: password = "123456" → BCrypt → "$2a$12$abc..." → Lưu vào DB
+
+BCrypt là gì?
+- Thuật toán mã hóa 1 chiều (không giải mã được)
+- Mỗi lần mã hóa cho kết quả khác (có salt ngẫu nhiên)
+- Chậm (cost factor 12) → Khó brute force
+
+Ví dụ:
+BCrypt.hashpw("123456", BCrypt.gensalt(12))
+→ "$2a$12$N0IA..." (60 ký tự)
+
+Kiểm tra password:
+BCrypt.checkpw("123456", "$2a$12$N0IA...") → true/false
+
+
+================================================================================
+II. WEBSOCKET & STOMP - REAL-TIME COMMUNICATION
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+-------------------------
+Tình huống: Chat real-time như Messenger
+- HTTP thông thường: Client hỏi → Server trả lời (1 chiều)
+- Chat cần: Server chủ động gửi tin nhắn cho client (2 chiều)
+
+Giải pháp cũ (tệ):
+- Polling: Client hỏi server mỗi 1 giây "Có tin nhắn mới không?"
+  → Lãng phí bandwidth, chậm
+
+Giải pháp mới (tốt):
+- WebSocket: Kết nối 2 chiều, server push tin nhắn ngay lập tức
+
+
+2. WEBSOCKET LÀ GÌ?
+--------------------
+WebSocket = Kết nối TCP liên tục giữa client và server.
+
+HTTP thông thường:
+Client: "Cho tôi danh sách posts"
+Server: "Đây, 10 posts"
+[Đóng kết nối]
+
+WebSocket:
+Client: "Kết nối với tôi" (handshake)
+Server: "OK, kết nối mở"
+[Kết nối luôn mở]
+Server: "Có tin nhắn mới!" (push)
+Client: "Gửi tin nhắn: Hello" (send)
+Server: "Đã nhận" (push)
+
+3. STOMP PROTOCOL
+-----------------
+STOMP = Simple Text Oriented Messaging Protocol
+Là protocol chạy trên WebSocket, giống như "ngôn ngữ" để giao tiếp.
+
+Tại sao cần STOMP?
+- WebSocket thuần chỉ gửi/nhận string
+- STOMP thêm cấu trúc: destination, headers, body
+- Giống như HTTP có GET/POST, STOMP có SEND/SUBSCRIBE
+
+STOMP Commands:
+- CONNECT: Kết nối tới server
+- SUBSCRIBE: Đăng ký nhận tin từ 1 topic
+- SEND: Gửi tin nhắn tới 1 destination
+- DISCONNECT: Ngắt kết nối
+
+4. FLOW CHAT REAL-TIME
+----------------------
+Bước 1: Client kết nối WebSocket
+const socket = new SockJS('http://localhost:8080/ws');
+const stompClient = Stomp.over(socket);
+
+stompClient.connect({
+  Authorization: 'Bearer eyJhbGci...'  // JWT token
+}, function(frame) {
+  console.log('Connected');
+});
+
+Bước 2: Client subscribe vào room chat
+stompClient.subscribe('/topic/room/123', function(message) {
+  // Nhận tin nhắn mới
+  const msg = JSON.parse(message.body);
+  console.log('New message:', msg.content);
+});
+
+Bước 3: User A gửi tin nhắn
+stompClient.send('/app/chat/send', {}, JSON.stringify({
+  roomId: '123',
+  content: 'Hello everyone!'
+}));
+
+Bước 4: Server nhận tin nhắn
+@MessageMapping("/chat/send")  // Nhận từ /app/chat/send
+@SendTo("/topic/room/{roomId}")  // Gửi tới /topic/room/123
+public MessageResponse sendMessage(SendMessageRequest request) {
+    // Lưu tin nhắn vào DB
+    Message message = messageService.save(request);
+    
+    // Trả về cho tất cả clients đang subscribe
+    return new MessageResponse(message);
+}
+
+Bước 5: Tất cả clients trong room nhận tin nhắn
+- User A, B, C đều subscribe /topic/room/123
+- Server gửi tin nhắn tới topic này
+- A, B, C đều nhận được tin nhắn real-time
+
+
+5. DESTINATION TYPES
+--------------------
+/topic/xxx - Broadcast (1 gửi, nhiều người nhận)
+Ví dụ: /topic/room/123
+- User A gửi tin nhắn
+- Tất cả user trong room đều nhận
+
+/queue/xxx - Point-to-point (1 gửi, 1 người nhận)
+Ví dụ: /queue/user/456/private
+- Gửi tin nhắn riêng cho user 456
+- Chỉ user 456 nhận được
+
+/user/queue/xxx - User-specific queue
+Ví dụ: /user/queue/notifications
+- Mỗi user có queue riêng
+- Chỉ user đó nhận được
+
+6. XÁC THỰC WEBSOCKET VỚI JWT
+------------------------------
+Vấn đề: WebSocket không có header như HTTP
+Giải pháp: Gửi JWT trong handshake
+
+Client:
+stompClient.connect({
+  Authorization: 'Bearer eyJhbGci...'
+}, callback);
+
+Server (WebSocketConfig):
+@Override
+public void configureClientInboundChannel(ChannelRegistration registration) {
+    registration.interceptors(new ChannelInterceptor() {
+        @Override
+        public Message<?> preSend(Message<?> message, MessageChannel channel) {
+            // Lấy JWT từ header
+            String token = getTokenFromMessage(message);
+            
+            // Verify JWT
+            if (jwtTokenProvider.validateToken(token)) {
+                String userId = jwtTokenProvider.getUserIdFromToken(token);
+                // Lưu user vào SecurityContext
+            }
+            
+            return message;
+        }
+    });
+}
+
+
+================================================================================
+III. KAFKA MESSAGING - ASYNC PROCESSING
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+-------------------------
+Tình huống: User đăng bài viết
+- Lưu post vào DB (nhanh - 50ms)
+- Gửi notification cho 1000 followers (chậm - 5s)
+- Gửi email cho admin (chậm - 2s)
+- Xử lý ảnh/video (rất chậm - 30s)
+
+Nếu làm đồng bộ (synchronous):
+User đăng bài → Đợi 37 giây → Mới thấy bài đăng
+→ Trải nghiệm tệ!
+
+Giải pháp: Xử lý bất đồng bộ (asynchronous) với Kafka
+
+2. KAFKA LÀ GÌ?
+---------------
+Kafka = Message Queue (Hàng đợi tin nhắn)
+Giống như bưu điện: Gửi thư → Bưu điện giữ → Người nhận lấy sau
+
+
+Thành phần Kafka:
+- Producer: Người gửi tin (PostService)
+- Topic: Chủ đề tin nhắn (post-created, notification-sent)
+- Consumer: Người nhận tin (NotificationService, EmailService)
+- Broker: Server Kafka (lưu trữ tin nhắn)
+
+3. FLOW ĐĂNG BÀI VỚI KAFKA
+--------------------------
+Bước 1: User đăng bài
+POST /api/v1/posts
+{
+  "content": "Hello world!",
+  "images": ["img1.jpg"]
+}
+
+Bước 2: PostService xử lý nhanh
+@Service
+public class PostService {
+    
+    @Autowired
+    private KafkaTemplate<String, PostCreatedEvent> kafkaTemplate;
+    
+    public PostResponse createPost(CreatePostRequest request) {
+        // 1. Lưu post vào DB (nhanh - 50ms)
+        Post post = postRepository.save(new Post(request));
+        
+        // 2. Gửi event vào Kafka (rất nhanh - 5ms)
+        PostCreatedEvent event = new PostCreatedEvent(
+            post.getId(),
+            post.getUserId(),
+            post.getContent()
+        );
+        kafkaTemplate.send("post-created", event);
+        
+        // 3. Trả về ngay cho user (tổng 55ms)
+        return new PostResponse(post);
+    }
+}
+
+Bước 3: Kafka lưu event vào topic "post-created"
+
+Bước 4: Các Consumer xử lý chậm (background)
+// Consumer 1: Gửi notification
+@KafkaListener(topics = "post-created")
+public void handlePostCreated(PostCreatedEvent event) {
+    // Lấy 1000 followers
+    List<User> followers = userService.getFollowers(event.getUserId());
+    
+    // Gửi notification cho từng người (5s)
+    followers.forEach(follower -> {
+        notificationService.send(follower.getId(), "New post from ...");
+    });
+}
+
+// Consumer 2: Gửi email
+@KafkaListener(topics = "post-created")
+public void sendEmailToAdmin(PostCreatedEvent event) {
+    emailService.send("admin@example.com", "New post created");
+}
+
+// Consumer 3: Xử lý ảnh
+@KafkaListener(topics = "post-created")
+public void processImages(PostCreatedEvent event) {
+    // Resize, compress, upload to Cloudinary (30s)
+}
+
+Kết quả:
+- User thấy bài đăng ngay lập tức (55ms)
+- Notification, email, xử lý ảnh chạy background
+- Nếu có lỗi → Kafka retry tự động
+
+
+4. KAFKA CONCEPTS
+-----------------
+Topic: Chủ đề tin nhắn
+- Giống như folder: post-created, user-registered, email-sent
+- Mỗi topic có nhiều partitions (để scale)
+
+Partition: Phân vùng của topic
+- Topic "post-created" có 3 partitions: 0, 1, 2
+- Tin nhắn được phân bổ đều vào các partitions
+- Mỗi partition xử lý độc lập → Nhanh hơn
+
+Consumer Group: Nhóm consumers
+- Nhiều consumers cùng xử lý 1 topic
+- Mỗi partition chỉ được 1 consumer trong group xử lý
+- Nếu 1 consumer chết → Consumer khác thay thế
+
+Offset: Vị trí đọc tin nhắn
+- Kafka lưu offset của mỗi consumer
+- Consumer đọc từ offset cuối cùng
+- Nếu consumer restart → Tiếp tục từ offset cũ (không mất tin)
+
+5. KHI NÀO DÙNG KAFKA?
+----------------------
+✅ Dùng Kafka khi:
+- Xử lý chậm (gửi email, xử lý ảnh/video)
+- Không cần kết quả ngay (notification, logging)
+- Cần retry nếu lỗi
+- Cần scale (nhiều consumers xử lý song song)
+
+❌ KHÔNG dùng Kafka khi:
+- Cần kết quả ngay lập tức (login, get profile)
+- Logic đơn giản, nhanh (< 100ms)
+- Không cần retry
+
+
+================================================================================
+IV. REDIS CACHE - TĂNG TỐC ỨNG DỤNG
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+-------------------------
+Tình huống: Xem profile user
+- Query DB: SELECT * FROM users WHERE id = 123 (50ms)
+- User xem profile 1000 lần/ngày
+- Tổng: 1000 * 50ms = 50 giây query DB mỗi ngày
+- DB bị quá tải!
+
+Giải pháp: Cache với Redis
+
+2. REDIS LÀ GÌ?
+---------------
+Redis = In-memory database (Database trong RAM)
+- Lưu dữ liệu trong RAM → Cực nhanh (< 1ms)
+- Key-Value store: key = "user:123", value = {user data}
+- Dùng để cache dữ liệu hay truy cập
+
+3. FLOW CACHE
+-------------
+Lần 1: Cache miss (không có trong cache)
+1. Client: GET /api/v1/users/123
+2. Server kiểm tra Redis: GET user:123 → null
+3. Server query DB: SELECT * FROM users WHERE id = 123 (50ms)
+4. Server lưu vào Redis: SET user:123 {user data} EX 3600 (1 giờ)
+5. Server trả về client
+
+Lần 2: Cache hit (có trong cache)
+1. Client: GET /api/v1/users/123
+2. Server kiểm tra Redis: GET user:123 → {user data} (< 1ms)
+3. Server trả về ngay (không query DB)
+
+
+4. CACHE STRATEGIES
+-------------------
+Cache-Aside (Lazy Loading):
+- Đọc: Kiểm tra cache → Nếu không có → Query DB → Lưu cache
+- Ghi: Cập nhật DB → Xóa cache
+- Dùng nhiều nhất
+
+Write-Through:
+- Ghi: Cập nhật DB → Cập nhật cache cùng lúc
+- Đọc: Luôn có trong cache
+- Dùng cho dữ liệu quan trọng
+
+Write-Behind:
+- Ghi: Cập nhật cache → Sau đó mới cập nhật DB (async)
+- Nhanh nhưng rủi ro mất dữ liệu
+
+5. CODE EXAMPLE
+---------------
+@Service
+public class UserService {
+    
+    @Autowired
+    private RedisTemplate<String, User> redisTemplate;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    public User getUserById(String userId) {
+        String cacheKey = "user:" + userId;
+        
+        // 1. Kiểm tra cache
+        User user = redisTemplate.opsForValue().get(cacheKey);
+        
+        if (user != null) {
+            // Cache hit
+            return user;
+        }
+        
+        // 2. Cache miss → Query DB
+        user = userRepository.findById(userId)
+            .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        // 3. Lưu vào cache (TTL 1 giờ)
+        redisTemplate.opsForValue().set(cacheKey, user, 1, TimeUnit.HOURS);
+        
+        return user;
+    }
+    
+    public User updateUser(String userId, UpdateUserRequest request) {
+        // 1. Cập nhật DB
+        User user = userRepository.findById(userId).orElseThrow();
+        user.setName(request.getName());
+        userRepository.save(user);
+        
+        // 2. Xóa cache (để lần đọc sau query DB lại)
+        String cacheKey = "user:" + userId;
+        redisTemplate.delete(cacheKey);
+        
+        return user;
+    }
+}
+
+6. CACHE INVALIDATION (Xóa cache)
+----------------------------------
+Vấn đề: Dữ liệu trong cache cũ, DB đã thay đổi
+
+Giải pháp 1: TTL (Time To Live)
+- Set thời gian hết hạn: 1 giờ, 1 ngày
+- Hết hạn → Redis tự động xóa
+- Đơn giản nhưng có thể trả dữ liệu cũ
+
+Giải pháp 2: Event-driven invalidation
+- Khi update user → Gửi event qua Kafka
+- Consumer nhận event → Xóa cache
+- Phức tạp nhưng chính xác
+
+
+7. KHI NÀO DÙNG CACHE?
+----------------------
+✅ Dùng cache khi:
+- Dữ liệu đọc nhiều, ghi ít (user profile, posts)
+- Dữ liệu ít thay đổi (settings, categories)
+- Query DB chậm (join nhiều bảng)
+- Cần giảm tải DB
+
+❌ KHÔNG cache khi:
+- Dữ liệu thay đổi liên tục (stock price, live score)
+- Dữ liệu nhạy cảm (password, payment info)
+- Dữ liệu lớn (video, file)
+
+
+================================================================================
+V. CLOUDINARY & FILE UPLOAD - LƯU TRỮ MEDIA
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+-------------------------
+Tình huống: User upload ảnh avatar
+- Lưu ở đâu? (Server, DB, Cloud?)
+- Làm sao resize ảnh? (1MB → 100KB)
+- Làm sao serve ảnh nhanh? (CDN)
+
+Giải pháp: Cloudinary (Cloud storage + CDN + Image processing)
+
+2. CLOUDINARY LÀ GÌ?
+--------------------
+Cloudinary = Cloud storage cho ảnh/video
+- Upload ảnh → Cloudinary lưu trữ
+- Tự động resize, compress, optimize
+- CDN toàn cầu → Load ảnh nhanh
+- Free tier: 25GB storage, 25GB bandwidth/tháng
+
+3. FLOW UPLOAD ẢNH
+------------------
+Bước 1: Client chọn ảnh
+<input type="file" accept="image/*" />
+
+Bước 2: Client gửi ảnh lên server
+POST /api/v1/media/upload
+Content-Type: multipart/form-data
+Body: file = avatar.jpg (5MB)
+
+Bước 3: Server upload lên Cloudinary
+@RestController
+public class MediaController {
+    
+    @Autowired
+    private CloudinaryStorageService cloudinaryService;
+    
+    @PostMapping("/upload")
+    public MediaResponse uploadImage(@RequestParam("file") MultipartFile file) {
+        // 1. Validate file
+        if (file.getSize() > 10 * 1024 * 1024) {  // 10MB
+            throw new ValidationException("File too large");
+        }
+        
+        if (!file.getContentType().startsWith("image/")) {
+            throw new ValidationException("Only images allowed");
+        }
+        
+        // 2. Upload to Cloudinary
+        String imageUrl = cloudinaryService.upload(file);
+        
+        // 3. Lưu metadata vào DB
+        Media media = new Media();
+        media.setUrl(imageUrl);
+        media.setType(MediaType.IMAGE);
+        mediaRepository.save(media);
+        
+        return new MediaResponse(media);
+    }
+}
+
+
+Bước 4: CloudinaryStorageService xử lý
+@Service
+public class CloudinaryStorageService {
+    
+    @Autowired
+    private Cloudinary cloudinary;
+    
+    public String upload(MultipartFile file) {
+        try {
+            // Upload với options
+            Map<String, Object> options = new HashMap<>();
+            options.put("folder", "social-media/avatars");
+            options.put("resource_type", "auto");
+            options.put("transformation", new Transformation()
+                .width(500).height(500).crop("fill")  // Resize 500x500
+                .quality("auto")  // Auto optimize
+                .fetchFormat("auto")  // Auto format (WebP nếu browser hỗ trợ)
+            );
+            
+            // Upload
+            Map uploadResult = cloudinary.uploader().upload(
+                file.getBytes(), 
+                options
+            );
+            
+            // Lấy URL
+            String imageUrl = (String) uploadResult.get("secure_url");
+            return imageUrl;
+            
+        } catch (IOException e) {
+            throw new RuntimeException("Upload failed", e);
+        }
+    }
+}
+
+Bước 5: Cloudinary trả về URL
+https://res.cloudinary.com/demo/image/upload/v1234/social-media/avatars/abc123.jpg
+
+Bước 6: Client hiển thị ảnh
+<img src="https://res.cloudinary.com/.../abc123.jpg" />
+
+4. CLOUDINARY TRANSFORMATIONS
+------------------------------
+Resize on-the-fly (không cần upload lại):
+
+Original URL:
+https://res.cloudinary.com/demo/image/upload/avatar.jpg
+
+Resize 200x200:
+https://res.cloudinary.com/demo/image/upload/w_200,h_200,c_fill/avatar.jpg
+
+Thumbnail 100x100:
+https://res.cloudinary.com/demo/image/upload/w_100,h_100,c_thumb/avatar.jpg
+
+Blur:
+https://res.cloudinary.com/demo/image/upload/e_blur:300/avatar.jpg
+
+Grayscale:
+https://res.cloudinary.com/demo/image/upload/e_grayscale/avatar.jpg
+
+5. VIDEO UPLOAD
+---------------
+Tương tự ảnh, nhưng:
+- Max size: 100MB
+- Auto transcode (MP4, WebM)
+- Generate thumbnail tự động
+- Adaptive streaming (HLS, DASH)
+
+
+================================================================================
+VI. CLEAN ARCHITECTURE - TỔ CHỨC CODE
+================================================================================
+
+1. VẤN ĐỀ CẦN GIẢI QUYẾT
+-------------------------
+Dự án lớn, nhiều người làm:
+- Code lộn xộn, không biết file nào ở đâu
+- Thay đổi 1 chỗ → Ảnh hưởng nhiều chỗ khác
+- Khó test, khó maintain
+
+Giải pháp: Clean Architecture (Kiến trúc sạch)
+
+
+2. 4 LAYERS CỦA CLEAN ARCHITECTURE
+----------------------------------
+
+┌─────────────────────────────────────┐
+│   PRESENTATION LAYER (Giao diện)   │  ← Controllers, DTOs
+├─────────────────────────────────────┤
+│   APPLICATION LAYER (Logic nghiệp vụ)│  ← Services, Use Cases
+├─────────────────────────────────────┤
+│   DOMAIN LAYER (Trung tâm)         │  ← Entities, Repositories
+├─────────────────────────────────────┤
+│   INFRASTRUCTURE LAYER (Kỹ thuật)  │  ← DB, Kafka, Redis, Cloudinary
+└─────────────────────────────────────┘
+
+Nguyên tắc: Layer trong KHÔNG phụ thuộc layer ngoài
+- Domain không biết gì về Controller, DB, Kafka
+- Application chỉ biết Domain
+- Infrastructure implement interface của Domain
+
+3. DOMAIN LAYER (Trung tâm)
+---------------------------
+Chứa: Entities, Repository Interfaces, Business Rules
+
+Entity = Đối tượng nghiệp vụ (User, Post, Comment)
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    private UUID id;
+    
+    @Column(unique = true, nullable = false)
+    private String email;
+    
+    private String passwordHash;
+    
+    // Business logic
+    public boolean isActive() {
+        return this.isActive && !this.isBlocked;
+    }
+    
+    public void changePassword(String newPassword) {
+        // Validate password strength
+        if (newPassword.length() < 8) {
+            throw new ValidationException("Password too short");
+        }
+        this.passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+    }
+}
+
+Repository Interface (chỉ định nghĩa, không implement)
+public interface UserRepository extends JpaRepository<User, UUID> {
+    Optional<User> findByEmail(String email);
+    List<User> findByIsActiveTrue();
+}
+
+4. APPLICATION LAYER (Logic nghiệp vụ)
+---------------------------------------
+Chứa: Services, Use Cases, Mappers
+
+Service = Xử lý logic nghiệp vụ
+@Service
+public class PostService {
+    
+    @Autowired
+    private PostRepository postRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private KafkaTemplate kafkaTemplate;
+    
+    @Transactional
+    public PostResponse createPost(CreatePostRequest request, String userId) {
+        // 1. Validate
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        if (!user.isActive()) {
+            throw new ForbiddenException("User is not active");
+        }
+        
+        // 2. Business logic
+        Post post = new Post();
+        post.setUserId(userId);
+        post.setContent(request.getContent());
+        post.setPrivacy(request.getPrivacy());
+        
+        // 3. Save to DB
+        post = postRepository.save(post);
+        
+        // 4. Send event (async)
+        kafkaTemplate.send("post-created", new PostCreatedEvent(post));
+        
+        // 5. Return DTO
+        return PostMapper.toResponse(post);
+    }
+}
+
+
+5. PRESENTATION LAYER (Giao diện)
+----------------------------------
+Chứa: Controllers, DTOs, Exception Handlers
+
+Controller = Nhận request, gọi Service, trả response
+@RestController
+@RequestMapping("/api/v1/posts")
+public class PostController {
+    
+    @Autowired
+    private PostService postService;
+    
+    @PostMapping
+    public ResponseEntity<ApiResponse<PostResponse>> createPost(
+        @Valid @RequestBody CreatePostRequest request,
+        @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String userId = userDetails.getUsername();
+        PostResponse post = postService.createPost(request, userId);
+        
+        return ResponseEntity.ok(
+            ApiResponse.success(post, "Post created successfully")
+        );
+    }
+    
+    @GetMapping("/{postId}")
+    public ResponseEntity<ApiResponse<PostResponse>> getPost(
+        @PathVariable String postId
+    ) {
+        PostResponse post = postService.getPostById(postId);
+        return ResponseEntity.ok(ApiResponse.success(post));
+    }
+}
+
+DTO = Data Transfer Object (Chỉ chứa data, không có logic)
+// Request DTO
+public class CreatePostRequest {
+    @NotBlank(message = "Content is required")
+    @Size(max = 5000, message = "Content too long")
+    private String content;
+    
+    @NotNull
+    private PostPrivacy privacy;
+    
+    private List<String> imageUrls;
+}
+
+// Response DTO
+public class PostResponse {
+    private String id;
+    private String content;
+    private PostPrivacy privacy;
+    private UserResponse author;
+    private int likesCount;
+    private int commentsCount;
+    private LocalDateTime createdAt;
+}
+
+6. INFRASTRUCTURE LAYER (Kỹ thuật)
+-----------------------------------
+Chứa: DB implementation, External services, Kafka, Redis
+
+Kafka Producer:
+@Service
+public class NotificationProducer {
+    
+    @Autowired
+    private KafkaTemplate<String, NotificationEvent> kafkaTemplate;
+    
+    public void sendNotification(NotificationEvent event) {
+        kafkaTemplate.send("notifications", event);
+    }
+}
+
+Redis Cache:
+@Service
+public class RedisCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public void set(String key, Object value, long ttl) {
+        redisTemplate.opsForValue().set(key, value, ttl, TimeUnit.SECONDS);
+    }
+    
+    public Object get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
+}
+
+
+7. LỢI ÍCH CỦA CLEAN ARCHITECTURE
+---------------------------------
+✅ Dễ tìm code: Biết ngay file ở layer nào
+✅ Dễ test: Mock layer ngoài, test logic riêng
+✅ Dễ thay đổi: Đổi DB từ PostgreSQL → MongoDB chỉ sửa Infrastructure
+✅ Dễ maintain: Mỗi layer có trách nhiệm rõ ràng
+✅ Dễ làm việc nhóm: Chia task theo layer
+
+8. QUY TẮC ĐẶT TÊN
+------------------
+Entity: User, Post, Comment (danh từ số ít)
+Repository: UserRepository, PostRepository (Entity + Repository)
+Service: UserService, PostService (Entity + Service)
+Controller: UserController, PostController (Entity + Controller)
+DTO Request: CreatePostRequest, UpdateUserRequest (Action + Entity + Request)
+DTO Response: PostResponse, UserResponse (Entity + Response)
+
+
+================================================================================
+VII. TỔNG KẾT - FLOW HOÀN CHỈNH
+================================================================================
+
+Ví dụ: User đăng bài viết có ảnh
+
+1. CLIENT GỬI REQUEST
+----------------------
+POST /api/v1/posts
+Headers:
+  Authorization: Bearer eyJhbGci...
+Body:
+{
+  "content": "Beautiful sunset!",
+  "imageUrls": ["https://cloudinary.com/.../sunset.jpg"],
+  "privacy": "PUBLIC"
+}
+
+2. SPRING SECURITY VERIFY JWT
+------------------------------
+JwtAuthenticationFilter:
+- Lấy token từ header
+- Verify signature
+- Lấy userId từ token
+- Load user từ DB
+- Lưu vào SecurityContext
+
+3. CONTROLLER NHẬN REQUEST
+---------------------------
+PostController:
+- Validate request (@Valid)
+- Lấy userId từ SecurityContext
+- Gọi PostService.createPost()
+
+4. SERVICE XỬ LÝ LOGIC
+-----------------------
+PostService:
+- Validate user có active không
+- Tạo Post entity
+- Lưu vào DB (PostgreSQL)
+- Gửi event vào Kafka topic "post-created"
+- Return PostResponse
+
+5. KAFKA CONSUMER XỬ LÝ ASYNC
+------------------------------
+NotificationConsumer:
+- Nhận event từ topic "post-created"
+- Lấy danh sách followers
+- Gửi notification cho từng follower
+- Lưu notification vào DB
+- Push qua WebSocket cho followers đang online
+
+6. WEBSOCKET PUSH NOTIFICATION
+-------------------------------
+NotificationWebSocketHandler:
+- Lấy danh sách followers đang online
+- Push notification qua WebSocket
+- Followers nhận notification real-time
+
+7. REDIS CACHE
+--------------
+- Cache post mới vào Redis (key: "post:123")
+- Cache newsfeed của user (key: "newsfeed:user:456")
+- TTL: 5 phút
+
+8. CLIENT NHẬN RESPONSE
+------------------------
+Response (55ms):
+{
+  "success": true,
+  "data": {
+    "id": "123",
+    "content": "Beautiful sunset!",
+    "imageUrls": [...],
+    "likesCount": 0,
+    "createdAt": "2024-01-20T10:30:00Z"
+  }
+}
+
+Followers nhận notification real-time qua WebSocket (background)
+
+
+================================================================================
+VIII. TIPS & BEST PRACTICES
+================================================================================
+
+1. SECURITY
+-----------
+✅ Luôn validate input
+✅ Dùng BCrypt cho password (cost factor 12)
+✅ JWT access token ngắn (15 phút)
+✅ Refresh token dài (7 ngày) và lưu DB
+✅ HTTPS only trong production
+✅ Rate limiting (100 requests/phút)
+
+2. PERFORMANCE
+--------------
+✅ Cache dữ liệu đọc nhiều (user profile, posts)
+✅ Dùng Kafka cho xử lý chậm (email, notification)
+✅ Pagination cho list API (20 items/page)
+✅ Index các foreign keys và search fields
+✅ Dùng CDN cho static files (Cloudinary)
+
+3. CODE QUALITY
+---------------
+✅ Follow Clean Architecture
+✅ Đặt tên rõ ràng, dễ hiểu
+✅ Viết comment cho logic phức tạp
+✅ Handle exception đúng cách
+✅ Viết unit test cho Service layer
+
+4. DEBUGGING
+------------
+✅ Log mọi thứ (request, response, error)
+✅ Dùng correlation ID để trace request
+✅ Monitor metrics (Actuator + Prometheus)
+✅ Test với Postman/Swagger trước khi integrate
+
+5. LEARNING PATH
+----------------
+1. Học JWT & Spring Security trước (nền tảng)
+2. Sau đó học WebSocket (real-time)
+3. Rồi học Kafka (async processing)
+4. Cuối cùng học Redis (optimization)
+
+Mỗi tuần học 1 topic, làm demo nhỏ để hiểu rõ.
+Đừng học hết cùng lúc → Sẽ bị overwhelm!
+
+
+================================================================================
+KẾT THÚC - CHÚC BẠN HỌC TỐT!
+================================================================================
+
+Nhớ: Đọc document, làm demo nhỏ, hỏi khi không hiểu.
+Senior luôn sẵn sàng giúp đỡ! 💪
