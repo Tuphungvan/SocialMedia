@@ -1,7 +1,7 @@
 package com.aht.social.presentation.controller;
 
-import com.aht.social.application.dto.request.LoginRequest;
-import com.aht.social.application.dto.request.RegisterRequest;
+import com.aht.social.application.dto.request.auth.LoginRequest;
+import com.aht.social.application.dto.request.auth.RegisterRequest;
 import com.aht.social.application.dto.response.auth.AuthResponse;
 import com.aht.social.application.dto.response.common.ApiResponse;
 import com.aht.social.application.service.AuthService;

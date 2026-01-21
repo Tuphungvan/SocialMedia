@@ -1,4 +1,4 @@
-package com.aht.social.application.dto.request;
+package com.aht.social.application.dto.request.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
