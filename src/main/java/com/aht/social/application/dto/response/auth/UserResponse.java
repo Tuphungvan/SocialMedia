@@ -1,6 +1,5 @@
 package com.aht.social.application.dto.response.auth;
 
-import com.aht.social.domain.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,6 +17,4 @@ public class UserResponse {
     private String username;
     private String email;
     private String avatarUrl;
-    private Role role;
-    private Boolean isVerified;
 }

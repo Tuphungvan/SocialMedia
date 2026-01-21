@@ -3,7 +3,6 @@ package com.aht.social.application.service;
 import com.aht.social.application.dto.request.auth.LoginRequest;
 import com.aht.social.application.dto.request.auth.RegisterRequest;
 import com.aht.social.application.dto.response.auth.AuthResponse;
-import com.aht.social.application.dto.response.auth.UserResponse;
 import com.aht.social.domain.entity.User;
 import com.aht.social.domain.enums.Role;
 import com.aht.social.domain.repository.UserRepository;
@@ -20,89 +19,59 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthService {
-    
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         log.info("Registering new user with email: {}", request.getEmail());
-        
-        // Check email exists
+
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email already exists");
+            throw new BadRequestException("Email đã tồn tại");
         }
-        
-        // Create user
+
         User user = User.builder()
-            .username(request.getUsername())
-            .email(request.getEmail())
-            .passwordHash(passwordEncoder.encode(request.getPassword()))
-            .role(Role.USER)
-            .isActive(true)
-            .isVerified(false)
-            .build();
-        
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(Role.USER)
+                .isActive(true)
+                .isVerified(false)
+                .build();
+
         user = userRepository.save(user);
-        
         log.info("User registered successfully: {}", user.getId());
-        
-        // Generate tokens
-        String accessToken = jwtTokenProvider.generateAccessToken(user);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
-        
-        return AuthResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .tokenType("Bearer")
-            .expiresIn(900000L)
-            .user(mapToUserResponse(user))
-            .build();
+
+        return buildAuthResponse(user);
     }
-    
+
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
-        
-        // Find user by email
+
         User user = userRepository.findByEmail(request.getEmail())
-            .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
-        
-        // Check password
+                .orElseThrow(() -> new UnauthorizedException("Email hoặc mật khẩu không đúng"));
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Invalid password for email: {}", request.getEmail());
-            throw new UnauthorizedException("Invalid email or password");
+            throw new UnauthorizedException("Email hoặc mật khẩu không đúng");
         }
-        
-        // Check active
+
         if (!user.getIsActive()) {
-            throw new UnauthorizedException("Account is disabled");
+            throw new UnauthorizedException("Tài khoản đã bị vô hiệu hóa");
         }
-        
+
         log.info("User logged in successfully: {}", user.getId());
-        
-        // Generate tokens
-        String accessToken = jwtTokenProvider.generateAccessToken(user);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
-        
-        return AuthResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .tokenType("Bearer")
-            .expiresIn(900000L)
-            .user(mapToUserResponse(user))
-            .build();
+
+        return buildAuthResponse(user);
     }
-    
-    private UserResponse mapToUserResponse(User user) {
-        return UserResponse.builder()
-            .id(user.getId())
-            .username(user.getUsername())
-            .email(user.getEmail())
-            .avatarUrl(user.getAvatarUrl())
-            .role(user.getRole())
-            .isVerified(user.getIsVerified())
-            .build();
+
+    private AuthResponse buildAuthResponse(User user) {
+        return AuthResponse.builder()
+                .accessToken(jwtTokenProvider.generateAccessToken(user))
+                .refreshToken(jwtTokenProvider.generateRefreshToken(user))
+                .build();
     }
 }
