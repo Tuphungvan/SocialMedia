@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### txt ###
+doc/HUONG_DAN_GITLAB.txt
+doc/HUONG_DAN_JIRA.txt
+

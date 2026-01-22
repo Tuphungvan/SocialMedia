@@ -1,0 +1,88 @@
+================================================================================
+                    GHI CHÚ VỀ REDIS CACHE CONFIGURATION
+================================================================================
+
+1. VẤN ĐỀ DEPRECATED JACKSON2JSONREDISSERIALIZER
+--------------------------------------------------------------------------------
+- Spring Data Redis 4.0+ đánh dấu Jackson2JsonRedisSerializer là deprecated
+- Lý do: Class này không linh hoạt, khó customize serialization logic
+- Giải pháp: Tạo custom JsonRedisSerializer implement RedisSerializer<Object>
+
+2. QUY TRÌNH OBJECT MAPPING VỚI REDIS
+--------------------------------------------------------------------------------
+a) Khi LƯU vào Redis (Serialization):
+   Java Object → ObjectMapper.writeValueAsBytes() → JSON bytes → Redis
+
+b) Khi ĐỌC từ Redis (Deserialization):
+   Redis → JSON bytes → ObjectMapper.readValue() → Java Object
+
+c) Vai trò của activateDefaultTyping():
+   - Lưu thông tin class vào JSON: {"@class":"com.aht.User", "id":1, ...}
+   - Giúp deserialize đúng type gốc (User, Post, etc.) thay vì Object
+   - CHỈ dùng cho Redis, KHÔNG dùng cho REST API (security risk)
+
+3. PHÂN BIỆT SPRING CACHE VS REDISTEMPLATE
+--------------------------------------------------------------------------------
+┌─────────────────────┬──────────────────────┬──────────────────────────┐
+│                     │   SPRING CACHE       │   REDISTEMPLATE          │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ Cách dùng           │ @Cacheable           │ redisService.set/get()   │
+│                     │ @CacheEvict          │                          │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ Code style          │ Declarative          │ Imperative               │
+│                     │ (annotation)         │ (manual code)            │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ Linh hoạt           │ Thấp                 │ Cao                      │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ Use case            │ Cache query results  │ Session, Rate limiting   │
+│                     │ Cache user profiles  │ Distributed lock         │
+│                     │ Cache posts/comments │ Real-time counters       │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ % sử dụng           │ 80% cases            │ 20% cases                │
+├─────────────────────┼──────────────────────┼──────────────────────────┤
+│ Bean sử dụng        │ CacheManager         │ RedisTemplate            │
+└─────────────────────┴──────────────────────┴──────────────────────────┘
+
+4. CẤU TRÚC HIỆN TẠI
+--------------------------------------------------------------------------------
+RedisConfig.java
+├── createRedisObjectMapper()      → Tạo ObjectMapper với Default Typing
+├── redisTemplate()                → Bean cho RedisService (manual operations)
+├── cacheManager()                 → Bean cho Spring Cache (@Cacheable)
+└── objectMapper()                 → Bean cho REST API (KHÔNG có Default Typing)
+
+JsonRedisSerializer.java           → Custom serializer thay thế deprecated class
+
+RedisService.java                  → Wrapper cho RedisTemplate
+├── Basic: set(), get(), delete()
+└── Advanced: setIfAbsent(), increment()
+
+CacheKeyGenerator.java             → Utility tạo cache keys theo convention
+
+5. VÍ DỤ SỬ DỤNG
+--------------------------------------------------------------------------------
+// Spring Cache - Đơn giản, tự động
+@Cacheable(value = "users", key = "#userId")
+public User getUserById(Long userId) {
+    return userRepository.findById(userId).orElseThrow();
+}
+
+// RedisTemplate - Linh hoạt, manual
+public boolean checkRateLimit(String userId) {
+    String key = "rate_limit:" + userId;
+    Long count = redisService.increment(key);
+    if (count == 1) {
+        redisService.expire(key, 1, TimeUnit.MINUTES);
+    }
+    return count <= 100;
+}
+
+6. LƯU Ý QUAN TRỌNG
+--------------------------------------------------------------------------------
+✓ ObjectMapper cho Redis PHẢI có activateDefaultTyping()
+✓ ObjectMapper cho REST API KHÔNG NÊN có activateDefaultTyping() (security)
+✓ Dùng Spring Cache cho simple caching (80% cases)
+✓ Dùng RedisTemplate cho advanced operations (20% cases)
+✓ Cả hai có thể dùng song song trong cùng 1 service
+
+================================================================================

@@ -4,19 +4,22 @@ import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.experimental.FieldDefaults;
 
 @Getter
 @Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
-    private int status;
-    private String message;
-    private T data;
+    int status;
+    String message;
+    T data;
 
     @Builder.Default
-    private LocalDateTime timestamp = LocalDateTime.now();
+    LocalDateTime timestamp = LocalDateTime.now();
     
     public static <T> ApiResponse<T> success(T data) {
         return ApiResponse.<T>builder()
@@ -49,3 +52,4 @@ public class ApiResponse<T> {
             .build();
     }
 }
+

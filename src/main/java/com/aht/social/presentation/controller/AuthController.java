@@ -1,8 +1,9 @@
 package com.aht.social.presentation.controller;
 
-import com.aht.social.application.dto.request.auth.LoginRequest;
-import com.aht.social.application.dto.request.auth.RegisterRequest;
-import com.aht.social.application.dto.response.auth.AuthResponse;
+import com.aht.social.application.dto.request.auth.LoginRequestDTO;
+import com.aht.social.application.dto.request.auth.RefreshTokenRequestDTO;
+import com.aht.social.application.dto.request.auth.RegisterRequestDTO;
+import com.aht.social.application.dto.response.auth.AuthResponseDTO;
 import com.aht.social.application.dto.response.common.ApiResponse;
 import com.aht.social.application.service.AuthService;
 import jakarta.validation.Valid;
@@ -22,22 +23,32 @@ public class AuthController {
     private final AuthService authService;
     
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<AuthResponse>> register(
-            @Valid @RequestBody RegisterRequest request
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> register(
+            @Valid @RequestBody RegisterRequestDTO request
     ) {
-        AuthResponse response = authService.register(request);
+        AuthResponseDTO response = authService.register(request);
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.success(response, "User registered successfully"));
     }
     
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(
-            @Valid @RequestBody LoginRequest request
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> login(
+            @Valid @RequestBody LoginRequestDTO request
     ) {
-        AuthResponse response = authService.login(request);
+        AuthResponseDTO response = authService.login(request);
         return ResponseEntity.ok(
             ApiResponse.success(response, "Login successful")
+        );
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> refreshToken(
+            @Valid @RequestBody RefreshTokenRequestDTO request
+    ) {
+        AuthResponseDTO response = authService.refreshToken(request.getRefreshToken());
+        return ResponseEntity.ok(
+            ApiResponse.success(response, "Token refreshed successfully")
         );
     }
 }

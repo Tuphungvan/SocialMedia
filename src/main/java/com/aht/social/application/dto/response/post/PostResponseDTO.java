@@ -1,6 +1,5 @@
 package com.aht.social.application.dto.response.post;
 
-import com.aht.social.application.dto.response.auth.UserResponse;
 import com.aht.social.domain.enums.PostPrivacy;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

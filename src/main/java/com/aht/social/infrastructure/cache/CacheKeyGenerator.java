@@ -1,8 +1,16 @@
 package com.aht.social.infrastructure.cache;
 
-public class CacheKeyGenerator {
+/**
+ * Utility class để generate cache keys theo convention
+ */
+public final class CacheKeyGenerator {
 
     private static final String PREFIX = "SOCIAL_MEDIA:";
+
+    // Private constructor để prevent instantiation
+    private CacheKeyGenerator() {
+        throw new UnsupportedOperationException("Utility class");
+    }
 
     public static String getUserKey(String userId) {
         return PREFIX + "USER:" + userId;

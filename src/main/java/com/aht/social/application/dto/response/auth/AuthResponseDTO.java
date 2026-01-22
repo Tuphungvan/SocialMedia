@@ -1,20 +1,18 @@
 package com.aht.social.application.dto.response.auth;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserResponse {
-    
-    private UUID id;
-    private String username;
-    private String email;
-    private String avatarUrl;
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class AuthResponseDTO {
+    String accessToken;
+    String refreshToken;
 }

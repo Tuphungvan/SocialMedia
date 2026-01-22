@@ -1,12 +1,15 @@
 package com.aht.social.domain.entity;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.experimental.FieldDefaults;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.aht.social.domain.enums.Gender;
 import com.aht.social.domain.enums.Role;
@@ -23,65 +26,67 @@ import java.util.UUID;
     @Index(name = "idx_google_id", columnList = "google_id"),
     @Index(name = "idx_facebook_id", columnList = "facebook_id")
 })
-@NoArgsConstructor
-@AllArgsConstructor
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+@EntityListeners(AuditingEntityListener.class)
 public class User {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    UUID id;
 
     @Column(nullable = false, length = 50)
-    private String username;
+    String username;
 
     @Column(unique = true, nullable = false, length = 50)
-    private String email;
+    String email;
 
-    private String passwordHash;
+    String passwordHash;
 
     @Column(unique = true, length = 20)
-    private String phoneNumber;
+    String phoneNumber;
 
     @Column(length = 500)
-    private String avatarUrl;
+    String avatarUrl;
 
     @Column(length = 500)
-    private String coverPhotoUrl;
+    String coverPhotoUrl;
 
     @Column(columnDefinition = "TEXT")
-    private String bio;  // Tiểu sử
+    String bio;
 
-    private LocalDate dateOfBirth;
+    LocalDate dateOfBirth;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 10)
-    private Gender gender;
+    Gender gender;
 
     @Builder.Default
-    private Boolean isVerified = false;
+    Boolean isVerified = false;
 
     @Builder.Default
-    private Boolean isActive = true;
+    Boolean isActive = true;
 
     @Column(unique = true, length = 100)
-    private String googleId;
+    String googleId;
 
     @Column(unique = true, length = 100)
-    private String facebookId;
+    String facebookId;
 
-    private LocalDateTime lastLoginAt;
+    LocalDateTime lastLoginAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private Role role = Role.USER;
+    Role role = Role.USER;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
+    @LastModifiedDate
+    LocalDateTime updatedAt;
 }

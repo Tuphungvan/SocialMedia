@@ -54,6 +54,7 @@ public class JwtTokenProvider {
         
         return Jwts.builder()
             .subject(user.getId().toString())
+            .claim("absoluteExpiry", expiryDate.getTime()) // Lưu thời gian hết hạn tuyệt đối
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(secretKey)
@@ -62,10 +63,20 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
-                .verifyWith(secretKey)         // Verify signature
+            Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseSignedClaims(token);     // Parse & validate
+                .parseSignedClaims(token)
+                .getPayload();
+            
+            // Kiểm tra absolute expiry (nếu có)
+            if (claims.containsKey("absoluteExpiry")) {
+                Long absoluteExpiry = claims.get("absoluteExpiry", Long.class);
+                if (System.currentTimeMillis() > absoluteExpiry) {
+                    log.error("Token exceeded absolute expiration time");
+                    return false;
+                }
+            }
             
             return true;
             
@@ -102,5 +113,28 @@ public class JwtTokenProvider {
             .getPayload();
         
         return claims.getExpiration();
+    }
+
+    public String rotateRefreshToken(String oldRefreshToken, User user) {
+        // Lấy absolute expiry từ token cũ
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
+            .build()
+            .parseSignedClaims(oldRefreshToken)
+            .getPayload();
+        
+        Long absoluteExpiry = claims.get("absoluteExpiry", Long.class);
+        Date absoluteExpiryDate = new Date(absoluteExpiry);
+        
+        // Tạo token mới nhưng GIỮ NGUYÊN absolute expiry
+        Date now = new Date();
+        
+        return Jwts.builder()
+            .subject(user.getId().toString())
+            .claim("absoluteExpiry", absoluteExpiry) // Giữ nguyên thời gian hết hạn gốc
+            .issuedAt(now)
+            .expiration(absoluteExpiryDate) // Expiry giống token cũ
+            .signWith(secretKey)
+            .compact();
     }
 }
