@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/socialmedia
     username: admin
-    password: admin123
+    password: admin
   
   jpa:
     hibernate:
