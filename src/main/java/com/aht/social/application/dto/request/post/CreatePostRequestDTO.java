@@ -21,7 +21,7 @@ public class CreatePostRequestDTO {
     private String content;
 
     @NotNull(message = "Quyền riêng tư không được để trống")
-    private PostPrivacy privacy = PostPrivacy.PUBLIC;
+    private PostPrivacy privacy;
 
     private String location;
     private String feeling;

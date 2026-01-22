@@ -30,4 +30,7 @@ public class PostResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private UserPublicResponse user;
+
+    private boolean isLiked;
+    private boolean isSaved;
 }

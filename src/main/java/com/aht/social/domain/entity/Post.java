@@ -36,6 +36,9 @@ public class Post {
     private String feeling;
     private boolean isEdited = false;
 
+    private boolean isLiked = false;
+    private boolean isSaved = false;
+
     private int likesCount = 0;
     private int commentsCount = 0;
     private int sharesCount = 0;
