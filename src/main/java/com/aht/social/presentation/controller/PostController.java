@@ -1,8 +1,10 @@
 package com.aht.social.presentation.controller;
 
 import com.aht.social.application.dto.request.post.CreatePostRequestDTO;
+import com.aht.social.application.dto.request.post.UpdatePostRequestDTO;
 import com.aht.social.application.dto.response.common.ApiResponse;
 import com.aht.social.application.dto.response.common.PaginationResponse;
+import com.aht.social.application.dto.response.post.PostDetailResponseDTO;
 import com.aht.social.application.dto.response.post.PostResponseDTO;
 import com.aht.social.application.service.PostService;
 import jakarta.validation.Valid;
@@ -26,7 +28,7 @@ public class PostController {
                 .body(ApiResponse.success(response, "Tạo post thành công"));
     }
 
-    @GetMapping
+    @GetMapping("/newsfeed")
     public ResponseEntity<ApiResponse<PaginationResponse<PostResponseDTO>>> getNewsfeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
@@ -41,5 +43,12 @@ public class PostController {
     ) {
         PostResponseDTO response = postService.getPostDetail(postId);
         return ResponseEntity.ok(ApiResponse.success(response, "Chi tiết bài viết"));
+    }
+
+    @PutMapping("/{postId}")
+    public ResponseEntity<PostResponseDTO> updatePost(
+            @PathVariable UUID postId,
+            @Valid @RequestBody UpdatePostRequestDTO requestDTO) {
+        return ResponseEntity.ok(postService.updatePost(postId, requestDTO));
     }
 }

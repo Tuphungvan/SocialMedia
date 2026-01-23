@@ -18,8 +18,8 @@ public class UpdatePostRequestDTO {
     private String feeling;
 
     // Cờ đánh dấu để cập nhật trạng thái is_edited = true trong DB
-    private boolean isEdited = true;
+    private boolean isEdited = false;
 
     // Danh sách media mới nếu người dùng thay đổi ảnh/video
-    private List<String> newMediaUrls;
+    private List<PostMediaRequestDTO> newMediaUrls;
 }
