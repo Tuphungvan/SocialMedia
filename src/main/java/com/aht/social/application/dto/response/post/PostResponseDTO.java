@@ -31,6 +31,6 @@ public class PostResponseDTO {
     private LocalDateTime updatedAt;
     private UserPublicResponse user;
 
-    private boolean isLiked;
-    private boolean isSaved;
+    private boolean isLiked = false;
+    private boolean isSaved = false;
 }

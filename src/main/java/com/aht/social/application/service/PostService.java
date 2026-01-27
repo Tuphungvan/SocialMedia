@@ -1,20 +1,26 @@
 package com.aht.social.application.service;
 
+import com.aht.social.application.dto.event.NotificationEvent;
 import com.aht.social.application.dto.request.post.CreatePostRequestDTO;
 import com.aht.social.application.dto.request.post.PostMediaRequestDTO;
+import com.aht.social.application.dto.request.post.SharePostRequestDTO;
 import com.aht.social.application.dto.request.post.UpdatePostRequestDTO;
 import com.aht.social.application.dto.response.comment.CommentResponseDTO;
 import com.aht.social.application.dto.response.common.PaginationResponse;
 import com.aht.social.application.dto.response.post.PostDetailResponseDTO;
 import com.aht.social.application.dto.response.post.PostResponseDTO;
+import com.aht.social.application.dto.response.post.UserPublicResponse;
 import com.aht.social.application.mapper.CommentMapper;
 import com.aht.social.application.mapper.PostMapper;
 import com.aht.social.application.mapper.PostMediaMapper;
+import com.aht.social.application.mapper.UserMapper;
 import com.aht.social.domain.entity.*;
 import com.aht.social.domain.enums.FriendshipStatus;
+import com.aht.social.domain.enums.NotificationType;
 import com.aht.social.domain.enums.PostPrivacy;
 import com.aht.social.domain.enums.TargetType;
 import com.aht.social.domain.repository.*;
+import com.aht.social.infrastructure.kafka.NotificationProducer;
 import com.aht.social.presentation.exception.ResourceNotFoundException;
 import com.aht.social.presentation.exception.UnauthorizedException;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +40,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class PostService {
+    private final UserMapper userMapper;
     private final PostRepository postRepository;
     private final PostMapper postMapper;
     private final UserRepository userRepository;
@@ -42,6 +49,7 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final CommentMapper commentMapper;
     private final FriendshipRepository friendshipRepository;
+    private final NotificationProducer notificationProducer;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -62,25 +70,37 @@ public class PostService {
     public PostResponseDTO createPost(CreatePostRequestDTO requestDTO) {
         User currentUser = getCurrentUser();
 
+        // 1. Map DTO sang Entity
         Post post = postMapper.toCreateEntity(requestDTO);
         post.setUser(currentUser);
         post.setEdited(false);
 
-        if (requestDTO.getMedia() != null) {
-            List<PostMedia> mediaEntities = new ArrayList<>();
-            requestDTO.getMedia().forEach(dto -> {
-                PostMedia media = postMediaMapper.toEntity(dto);
-                media.setPost(post);
-                mediaEntities.add(media);
-            });
+        // Khởi tạo các giá trị mặc định (Counter)
+        post.setLikesCount(0);
+        post.setCommentsCount(0);
+        post.setSharesCount(0);
+
+        // 2. Xử lý Media (Chỉ chạy nếu có media)
+        if (requestDTO.getMedia() != null && !requestDTO.getMedia().isEmpty()) {
+            List<PostMedia> mediaEntities = requestDTO.getMedia().stream()
+                    .map(dto -> {
+                        PostMedia media = postMediaMapper.toEntity(dto);
+                        media.setPost(post);
+                        return media;
+                    }).collect(Collectors.toList());
             post.setMedia(mediaEntities);
         }
-        post.setCreatedAt(LocalDateTime.now());
-        post.setUpdatedAt(LocalDateTime.now());
+
+        // 3. Lưu (CreatedAt/UpdatedAt sẽ tự sinh nhờ @CreationTimestamp)
         Post saved = postRepository.save(post);
+
+        // 4. Map ngược lại DTO
         PostResponseDTO response = postMapper.toDTO(saved);
-        //set like false cho post mới tạo
+
+        // Luôn set mặc định là false vì bài mới tạo chưa ai like/save
         response.setLiked(false);
+        response.setSaved(false);
+
         return response;
     }
 
@@ -258,7 +278,7 @@ public class PostService {
     }
 
     @Transactional
-    public PostResponseDTO updatePost(UUID postId,UpdatePostRequestDTO requestDTO){
+    public PostResponseDTO updatePost(UUID postId, UpdatePostRequestDTO requestDTO){
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài viết"));
         User user = getCurrentUser();
@@ -290,4 +310,119 @@ public class PostService {
         return postMapper.toDTO(saved);
     }
 
+    @Transactional
+    public void deletePost(UUID postId) {
+        // 1. Tìm bài viết
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài viết để xóa"));
+
+        // 2. Kiểm tra quyền xóa (Owner hoặc Admin)
+        User currentUser = getCurrentUser();
+        boolean isOwner = post.getUser().getId().equals(currentUser.getId());
+        // Kiểm tra Role
+        boolean isAdmin = currentUser.getRole().name().equals("ADMIN");
+
+        if (!isOwner && !isAdmin) {
+            throw new AccessDeniedException("Bạn không có quyền xóa bài viết này");
+        }
+
+        // 3. Dọn dẹp dữ liệu liên quan không có FK Cascade (Như Like)
+        // Vì Like dùng chung cho Post và Comment qua targetId, JPA không tự xóa được
+        likeRepository.deleteByTargetTypeAndTargetId(TargetType.POST, postId);
+
+        // 4. Dọn dẹp Comment (Nếu trong Post.java bạn chưa đặt OneToMany Cascade)
+        // Cách 1: Nếu có @OneToMany(mappedBy="post", cascade=REMOVE) -> Không cần gọi repo
+        // Cách 2: Gọi repo xóa thủ công (Nếu bạn muốn Entity Post nhẹ nhàng)
+        commentRepository.deleteByPostId(postId);
+
+        // 5. Cuối cùng mới xóa Post
+        // Lúc này PostMedia sẽ tự động bị xóa do CascadeType.ALL đã cấu hình
+        postRepository.delete(post);
+
+        log.info("Bài viết {} đã được xóa bởi {}", postId, currentUser.getUsername());
+    }
+
+    //Like and unlike a post
+    @Transactional
+    public boolean toggleLike(UUID postId){
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài viết"));
+        User currentUser = getCurrentUser();
+        Optional<Like> existingLike = likeRepository.findByUserIdAndTargetTypeAndTargetId(
+                currentUser.getId(), TargetType.POST, postId
+        );
+
+        if (existingLike.isPresent()){
+            likeRepository.delete(existingLike.get());
+            postRepository.updateLikesCount(postId, false); //Trừ 1 like
+            return false; //Trả về false là giờ không còn like nữa
+        }else {
+            Like like = new Like();
+            like.setUser(currentUser);
+            like.setTargetType(TargetType.POST);
+            like.setTargetId(postId);
+
+            likeRepository.save(like);
+            postRepository.updateLikesCount(postId, true); // Cộng 1
+            // 3. Bắn sự kiện sang Kafka để xử lý thông báo ngầm
+            notificationProducer.sendNotification(new NotificationEvent(
+                    currentUser.getId(),
+                    post.getUser().getId(),
+                    NotificationType.LIKE,
+                    postId,
+                    currentUser.getUsername() + " đã thích bài viết của bạn."
+            ));
+            return true; // Trả về true nghĩa là đã Like thành công
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public PaginationResponse<UserPublicResponse> getLikesByPostId(UUID postId, Pageable pageable){
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài viết"));
+        User currentUser = getCurrentUser();
+        validatePostAccess(post, currentUser);
+
+        Page<User> userPage = likeRepository.findUserByPostId(postId, pageable);
+        Page<UserPublicResponse> responsePage = userPage.map(userMapper::toPublicResponse);
+        return PaginationResponse.from(responsePage);
+    }
+
+    @Transactional
+    public PostResponseDTO sharePost(UUID originalPostId, SharePostRequestDTO requestDTO) {
+        User currentUser = getCurrentUser();
+
+        // 1. Kiểm tra bài viết gốc có tồn tại không
+        Post originalPost = postRepository.findById(originalPostId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài viết gốc"));
+
+        // 2. Kiểm tra quyền xem bài gốc (Không được share bài PRIVATE của người khác)
+        validatePostAccess(originalPost, currentUser);
+
+        // 3. Tạo bài viết mới (Bài share)
+        Post sharePost = new Post();
+        sharePost.setUser(currentUser);
+        sharePost.setContent(requestDTO.getContent());
+        sharePost.setPrivacy(requestDTO.getPrivacy());
+        sharePost.setSharedPost(originalPost); // Liên kết đến bài gốc
+        sharePost.setEdited(false);
+
+        Post savedShare = postRepository.save(sharePost);
+
+        // 4. Tăng sharesCount của bài gốc (Atomic Update tương tự Like)
+        postRepository.updateSharesCount(originalPostId);
+
+        // 5. Bắn Kafka Notification (Không báo nếu tự share bài của mình)
+        if (!currentUser.getId().equals(originalPost.getUser().getId())) {
+            notificationProducer.sendNotification(new NotificationEvent(
+                    currentUser.getId(),
+                    originalPost.getUser().getId(),
+                    NotificationType.SHARE,
+                    savedShare.getId(), // Trỏ tới bài viết mới tạo
+                    currentUser.getUsername() + " đã chia sẻ bài viết của bạn."
+            ));
+        }
+
+        return postMapper.toDTO(savedShare);
+    }
 }

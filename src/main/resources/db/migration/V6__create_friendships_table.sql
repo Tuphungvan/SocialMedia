@@ -3,7 +3,7 @@ CREATE TABLE friendships (
     id UUID PRIMARY KEY,
     requester_id UUID NOT NULL,
     addressee_id UUID NOT NULL,
-    status VARCHAR(10) NOT NULL, -- PENDING, ACCEPTED, BLOCKED, DENY
+    status VARCHAR(10) NOT NULL, -- PENDING, ACCEPTED, BLOCKED
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
     CONSTRAINT fk_friendship_requester FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,

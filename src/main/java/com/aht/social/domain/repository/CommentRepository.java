@@ -21,4 +21,6 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
     // Cách tối ưu hơn: Query lấy map (commentId -> count) bằng JPQL
     @Query("SELECT c.parentComment.id, COUNT(c) FROM Comment c WHERE c.parentComment.id IN :ids GROUP BY c.parentComment.id")
     List<Object[]> countRepliesByCommentIds(@Param("ids") List<UUID> ids);
+
+    void deleteByPostId(UUID postId);
 }
