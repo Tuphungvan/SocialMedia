@@ -36,6 +36,10 @@ public class Comment {
 
     private int likesCount = 0;
 
+    private boolean isEdited = false;
+
+    private int repliesCount = 0;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

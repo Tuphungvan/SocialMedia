@@ -21,7 +21,8 @@ public class CommentResponseDTO {
     private int likesCount;
     private int repliesCount; // Số lượng phản hồi của comment này
     private boolean isLiked;  // Trạng thái của người đang xem
-    private UUID parentCommentId;
+    private boolean isEdited;
+    private UUID parentCommentId; // Trường này sẽ null nếu comment là parent
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

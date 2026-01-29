@@ -14,7 +14,6 @@ public interface CommentMapper {
     @Mapping(target = "user", source = "user") // Ánh xạ từ User Entity sang UserResponseDTO
     @Mapping(target = "parentCommentId", source = "parentComment.id")
     @Mapping(target = "isLiked", ignore = true) // Sẽ set thủ công trong Service
-    @Mapping(target = "repliesCount", ignore = true) // Sẽ set thủ công hoặc qua query count
     CommentResponseDTO toDTO(Comment comment);
 
     List<CommentResponseDTO> toDTOList(List<Comment> comments);
