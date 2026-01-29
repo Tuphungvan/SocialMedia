@@ -1,5 +1,5 @@
 package com.aht.social.domain.enums;
 
 public enum NotificationType {
-    LIKE, SHARE, COMMENT, FRIEND_REQUEST
+    LIKE, SHARE, COMMENT, FRIEND_REQUEST, REPLY_COMMENT
 }

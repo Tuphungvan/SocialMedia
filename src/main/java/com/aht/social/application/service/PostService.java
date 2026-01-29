@@ -66,6 +66,61 @@ public class PostService {
         }
     }
 
+    private void validatePostAccess(Post post, User currentUser) {
+        PostPrivacy privacy = post.getPrivacy();
+        if(privacy == PostPrivacy.PUBLIC){
+            return;
+        }
+
+        if(currentUser == null){
+            throw new UnauthorizedException("Bạn cần đăng nhập để xem bài viết này.");
+        }
+
+        if (privacy == PostPrivacy.PRIVATE){
+            if (!post.getUser().getId().equals(currentUser.getId())){
+                throw new AccessDeniedException("Đây là bài viết riêng tư");
+            }
+            return;
+        }
+
+        if(privacy == PostPrivacy.FRIENDS){
+            boolean isOwner = post.getUser().getId().equals(currentUser.getId());
+            if(!isOwner){
+                boolean isFriend = friendshipRepository.existsByUserIdAndFriendIdAndStatus(
+                        currentUser.getId(), post.getUser().getId(), FriendshipStatus.ACCEPTED);
+                if (!isFriend){
+                    throw new AccessDeniedException(
+                            "Chỉ bạn bè mới có thể xem bài viết này");
+                }
+            }
+        }
+    }
+
+    private void setLikedStatusForPosts(List<PostResponseDTO> posts, UUID userId) {
+        if (posts.isEmpty()) {
+            return;
+        }
+
+        //Lay danh sach post IDs
+        List<UUID> postIds = posts.stream()
+                .map(PostResponseDTO::getId)
+                .toList();
+
+        //Query all likes of user for posts in one
+        List<Like> likes = likeRepository.findByUserIdAndTargetTypeAndTargetIdIn
+                (userId, TargetType.POST, postIds);
+
+        //create set have post IDs was liked
+        Set<UUID> likedPostIds = likes.stream()
+                .map(Like::getTargetId)
+                .collect(Collectors.toSet());
+
+        //set isLiked for each post
+        posts.forEach(post -> {
+            post.setLiked(likedPostIds.contains(post.getId()));
+        });
+    }
+
     @Transactional
     public PostResponseDTO createPost(CreatePostRequestDTO requestDTO) {
         User currentUser = getCurrentUser();
@@ -102,31 +157,6 @@ public class PostService {
         response.setSaved(false);
 
         return response;
-    }
-
-    private void setLikedStatusForPosts(List<PostResponseDTO> posts, UUID userId) {
-        if (posts.isEmpty()) {
-            return;
-        }
-
-        //Lay danh sach post IDs
-        List<UUID> postIds = posts.stream()
-                .map(PostResponseDTO::getId)
-                .toList();
-
-        //Query all likes of user for posts in one
-        List<Like> likes = likeRepository.findByUserIdAndTargetTypeAndTargetIdIn
-                (userId, TargetType.POST, postIds);
-
-        //create set have post IDs was liked
-        Set<UUID> likedPostIds = likes.stream()
-                .map(Like::getTargetId)
-                .collect(Collectors.toSet());
-
-        //set isLiked for each post
-        posts.forEach(post -> {
-            post.setLiked(likedPostIds.contains(post.getId()));
-        });
     }
 
     @Transactional(readOnly = true)
@@ -185,36 +215,6 @@ public class PostService {
         );
 
         return PaginationResponse.from(resultPage);
-    }
-
-    private void validatePostAccess(Post post, User currentUser) {
-        PostPrivacy privacy = post.getPrivacy();
-        if(privacy == PostPrivacy.PUBLIC){
-            return;
-        }
-
-        if(currentUser == null){
-            throw new UnauthorizedException("Bạn cần đăng nhập để xem bài viết này.");
-        }
-
-        if (privacy == PostPrivacy.PRIVATE){
-            if (!post.getUser().getId().equals(currentUser.getId())){
-                throw new AccessDeniedException("Đây là bài viết riêng tư");
-            }
-            return;
-        }
-
-        if(privacy == PostPrivacy.FRIENDS){
-            boolean isOwner = post.getUser().getId().equals(currentUser.getId());
-            if(!isOwner){
-                boolean isFriend = friendshipRepository.existsByUserIdAndFriendIdAndStatus(
-                        currentUser.getId(), post.getUser().getId(), FriendshipStatus.ACCEPTED);
-                if (!isFriend){
-                    throw new AccessDeniedException(
-                            "Chỉ bạn bè mới có thể xem bài viết này");
-                }
-            }
-        }
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,7 @@
 package com.aht.social.domain.repository;
 
 import com.aht.social.domain.entity.Post;
+import org.jspecify.annotations.NullMarked;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Repository
+@NullMarked
 public interface PostRepository extends JpaRepository<Post, UUID> {
 
     @EntityGraph(attributePaths = {"user", "media"})
@@ -38,4 +40,14 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
     @Modifying
     @Query("UPDATE Post p SET p.commentsCount = p.commentsCount + 1 WHERE p.id = :postId")
     void incrementCommentsCount(@Param("postId") UUID postId);
+
+//    @Transactional
+//    @Modifying
+//    @Query("UPDATE Post p SET p.commentsCount = p.commentsCount - 1 WHERE p.id = :postId AND p.commentsCount > 0")
+//    void decrementCommentsCount(@Param("postId") UUID postId);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE Post p SET p.commentsCount = p.commentsCount - :amount WHERE p.id = :postId AND p.commentsCount >= :amount")
+    void decrementCommentsCountByAmount(@Param("postId") UUID postId, @Param("amount") int amount);
 }

@@ -23,7 +23,6 @@ public interface LikeRepository extends JpaRepository<Like, UUID> {
     //Kiểm tra xem người dùng đã like hay chưa
     Optional<Like> findByUserIdAndTargetTypeAndTargetId(UUID userId, TargetType targetType, UUID targetId);
     // Xóa khi người dùng unlike
-    void deleteByUserIdAndTargetTypeAndTargetId(UUID userId, TargetType targetType, UUID targetId);
     //Lấy danh sách like phân trang
     @Query("SELECT l.user FROM Like l WHERE l.targetId = :targetId AND l.targetType = 'POST' ORDER BY l.createdAt DESC")
     Page<User> findUserByPostId(@Param("targetId") UUID targetId, Pageable pageable);
